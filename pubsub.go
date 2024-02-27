@@ -15,7 +15,7 @@ type BloomPubSub interface {
 	Subscribe(ctx context.Context, channel string, bg *LayeredBloomFilter) <-chan error
 }
 
-type bloomPubSubImpl struct {
+type BloomPubSubImpl struct {
 	rdb          *redis.Client
 	consumerName string
 	groupName    string
@@ -29,12 +29,12 @@ type BloomBroadcastMessage struct {
 }
 
 func NewBloomPubSub(rdb *redis.Client, group, consumer string, log *logrus.Logger) BloomPubSub {
-	return &bloomPubSubImpl{rdb: rdb, consumerName: consumer, groupName: group, log: log}
+	return &BloomPubSubImpl{rdb: rdb, consumerName: consumer, groupName: group, log: log}
 
 }
 
 // Publish broadcasts a message to a channel.
-func (b *bloomPubSubImpl) Publish(ctx context.Context, channel string, message *BloomBroadcastMessage) error {
+func (b *BloomPubSubImpl) Publish(ctx context.Context, channel string, message *BloomBroadcastMessage) error {
 	pipeline := b.rdb.TxPipeline()
 	for _, location := range message.Locations {
 		pipeline.SetBit(ctx, message.BloomKey, int64(location), 1)
@@ -46,7 +46,7 @@ func (b *bloomPubSubImpl) Publish(ctx context.Context, channel string, message *
 	_, err := pipeline.Exec(ctx)
 	return err
 }
-func (b *bloomPubSubImpl) appendBitSet(ctx context.Context, message map[string]interface{}, bf *LayeredBloomFilter) error {
+func (b *BloomPubSubImpl) appendBitSet(ctx context.Context, message map[string]interface{}, bf *LayeredBloomFilter) error {
 	// 将map转换为JSON字节序列
 	jsonData, err := json.Marshal(message)
 	if err != nil {
@@ -64,7 +64,7 @@ func (b *bloomPubSubImpl) appendBitSet(ctx context.Context, message map[string]i
 
 }
 
-func (b *bloomPubSubImpl) Subscribe(ctx context.Context, channel string, bf *LayeredBloomFilter) <-chan error {
+func (b *BloomPubSubImpl) Subscribe(ctx context.Context, channel string, bf *LayeredBloomFilter) <-chan error {
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
