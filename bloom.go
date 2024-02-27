@@ -3,7 +3,6 @@ package golayeredbloom
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/bits-and-blooms/bloom/v3"
@@ -74,11 +73,33 @@ func (bf *LayeredBloomFilter) TestOrAdd(ctx context.Context, key string, value [
 	if !ok {
 		locations := filter.Locations(value)
 		err := bf.cache(ctx, key, locations)
-		log.Println("cache err:", err)
 		return ok, err
 	}
 	return ok, nil
 
+}
+func (bf *LayeredBloomFilter) Test(ctx context.Context, key string, value []byte) bool {
+	filter, ok := bf.filters[key]
+	if !ok {
+		return false
+	}
+	return filter.Test(value)
+}
+func (bf *LayeredBloomFilter) Add(ctx context.Context, key string, value []byte, n uint, p float64) error {
+	bf.mux.Lock()
+	defer bf.mux.Unlock()
+	filter, ok := bf.filters[key]
+	if !ok {
+		filter = newBloomFilter(n, p)
+		bf.filters[key] = filter
+	}
+	ok = filter.TestOrAdd(value)
+	if !ok {
+		locations := filter.Locations(value)
+		err := bf.cache(ctx, key, locations)
+		return err
+	}
+	return nil
 }
 func (bf *LayeredBloomFilter) appendBitSet(ctx context.Context, key string, values []uint) error {
 	bf.mux.Lock()
