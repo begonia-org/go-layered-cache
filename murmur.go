@@ -286,3 +286,63 @@ func (d *digest128) sum256(data []byte) (hash1, hash2, hash3, hash4 uint64) {
 
 	return hash1, hash2, hash3, hash4
 }
+
+// MurmurHash64A computes the MurmurHash2 for 64-bit platforms.
+
+//-----------------------------------------------------------------------------
+// MurmurHash2, 64-bit versions, by Austin Appleby
+
+// The same caveats as 32-bit MurmurHash2 apply here - beware of alignment
+// and endian-ness issues if used across multiple platforms.
+
+// 64-bit hash for 64-bit platforms
+func MurmurHash64A(key []byte, seed uint64) uint64 {
+	const m uint64 = 0xc6a4a7935bd1e995
+	const r = 47
+
+	var h uint64 = seed ^ (uint64(len(key)) * m)
+
+	// We need to get the pointer to the slice's underlying array
+	data := (*[1 << 30]uint64)(unsafe.Pointer(&key[0]))[: len(key)/8 : len(key)/8]
+
+	for _, k := range data {
+		k *= m
+		k ^= k >> r
+		k *= m
+
+		h ^= k
+		h *= m
+	}
+
+	var data2 = key[len(key)&^7:] // Get remaining bytes
+
+	switch len(data2) {
+	case 7:
+		h ^= uint64(data2[6]) << 48
+		fallthrough
+	case 6:
+		h ^= uint64(data2[5]) << 40
+		fallthrough
+	case 5:
+		h ^= uint64(data2[4]) << 32
+		fallthrough
+	case 4:
+		h ^= uint64(data2[3]) << 24
+		fallthrough
+	case 3:
+		h ^= uint64(data2[2]) << 16
+		fallthrough
+	case 2:
+		h ^= uint64(data2[1]) << 8
+		fallthrough
+	case 1:
+		h ^= uint64(data2[0])
+		h *= m
+	}
+
+	h ^= h >> r
+	h *= m
+	h ^= h >> r
+
+	return h
+}

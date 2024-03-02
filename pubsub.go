@@ -10,9 +10,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type GroupName string
+type ConsumerName string
+type ChannelName string
 type BloomPubSub interface {
 	Publish(ctx context.Context, channel string, message *BloomBroadcastMessage) error
 	Subscribe(ctx context.Context, channel string, bg *LayeredBloomFilter) <-chan error
+	Get(ctx context.Context, key string) ([]uint, error)
 }
 
 type BloomPubSubImpl struct {
@@ -28,8 +32,8 @@ type BloomBroadcastMessage struct {
 	Locations []uint `json:"locations"`
 }
 
-func NewBloomPubSub(rdb *redis.Client, group, consumer string, log *logrus.Logger) BloomPubSub {
-	return &BloomPubSubImpl{rdb: rdb, consumerName: consumer, groupName: group, log: log}
+func NewBloomPubSub(rdb *redis.Client, group GroupName, consumer ConsumerName, log *logrus.Logger) BloomPubSub {
+	return &BloomPubSubImpl{rdb: rdb, consumerName: string(consumer), groupName: string(group), log: log}
 
 }
 
@@ -117,4 +121,18 @@ func (b *BloomPubSubImpl) Subscribe(ctx context.Context, channel string, bf *Lay
 		}
 	}()
 	return errChan
+}
+func (b *BloomPubSubImpl) bytesToUintSlice(bytes []byte) []uint {
+	var uintSlice []uint
+	for _, b := range bytes {
+		uintSlice = append(uintSlice, uint(b))
+	}
+	return uintSlice
+}
+func (b *BloomPubSubImpl) Get(ctx context.Context, key string) ([]uint, error) {
+	values, err := b.rdb.Get(ctx, key).Bytes()
+	if err != nil {
+		return nil, err
+	}
+	return b.bytesToUintSlice(values), nil
 }

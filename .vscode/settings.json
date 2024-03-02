@@ -1,0 +1,15 @@
+{
+  "C_Cpp.default.includePath": [
+	"RedisBloom/deps",
+	"RedisBloom/deps/murmur2",
+	"RedisBloom/src",
+	"RedisBloom/deps/RedisModulesSDK/rmutil"
+],
+  "files.associations": {
+    "redismodule.h": "c"
+  },
+  "go.testEnvVars": {
+	"LD_LIBRARY_PATH": "${workspaceFolder}/lib:${env:LD_LIBRARY_PATH}"
+  }
+  
+}

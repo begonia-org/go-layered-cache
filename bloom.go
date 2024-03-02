@@ -11,7 +11,11 @@ import (
 type bloomFilter struct {
 	*bloom.BloomFilter
 }
-
+type BloomConfig struct{
+	N uint
+	P float64
+	Key string
+}
 // baseHashes returns the four hash values of data that are used to create k
 // hashes
 func BaseHashes(data []byte) [4]uint64 {
@@ -47,17 +51,17 @@ func (bf *bloomFilter) Locations(data []byte) []uint {
 type LayeredBloomFilter struct {
 	pubsub     BloomPubSub
 	filters    map[string]*bloomFilter
-	mux        sync.Mutex
+	mux        sync.RWMutex
 	name       string
 	pubsubName string
 }
 
-func NewLayeredBloomFilter(pubsub BloomPubSub, pubsubName, name string) *LayeredBloomFilter {
+func NewLayeredBloomFilter(pubsub BloomPubSub, pubsubName ChannelName, name ConsumerName) *LayeredBloomFilter {
 	return &LayeredBloomFilter{
 		pubsub:     pubsub,
 		filters:    make(map[string]*bloomFilter),
-		name:       name,
-		pubsubName: pubsubName,
+		name:       string(name),
+		pubsubName: string(pubsubName),
 	}
 }
 
@@ -128,4 +132,24 @@ func (bf *LayeredBloomFilter) watch(ctx context.Context) <-chan error {
 func (bf *LayeredBloomFilter) OnStart(ctx context.Context) <-chan error {
 	errChan := bf.watch(ctx)
 	return errChan
+}
+
+func (bf *LayeredBloomFilter) LoadFrom(ctx context.Context, keys []*BloomConfig) error {
+	bf.mux.Lock()
+	defer bf.mux.Unlock()
+	for _, key := range keys {
+		locations, err := bf.pubsub.Get(ctx, key.Key)
+		if err != nil {
+			return err
+		}
+		filter, ok := bf.filters[key.Key]
+		if !ok {
+			filter = newBloomFilter(key.N, key.P)
+			bf.filters[key.Key] = filter
+		}
+		for _, val := range locations {
+			filter.BitSet().Set(val)
+		}
+	}
+	return nil
 }

@@ -1,0 +1,3 @@
+[submodule "RedisBloom"]
+	path = RedisBloom
+	url = git@github.com:begonia-org/RedisBloom.git
