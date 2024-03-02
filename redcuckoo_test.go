@@ -1,4 +1,4 @@
-package gocuckoo
+package golayeredbloom
 
 import (
 	"context"
@@ -6,45 +6,24 @@ import (
 	"unsafe"
 
 	"github.com/agiledragon/gomonkey/v2"
-	golayeredbloom "github.com/begonia-org/go-layered-bloom"
 	"github.com/redis/go-redis/v9"
 	c "github.com/smartystreets/goconvey/convey"
 )
 
-func TestCuckoo(t *testing.T) {
-	c.Convey("TestCuckoo", t, func() {
-		cf := New(1000, 2, 500, 1)
-		hash := golayeredbloom.MurmurHash64A([]byte("item1"), 0)
-		t.Log("hash2:", hash)
-		t.Log("cf:", hash)
-		t.Log("cf fp:", hash%255+1)
-		err := cf.Insert([]byte("item1"))
-		c.So(err, c.ShouldEqual, nil)
-		ok := cf.Check([]byte("item1"))
-		c.So(ok, c.ShouldEqual, true)
-
-		ok = cf.Check([]byte("item2"))
-		c.So(ok, c.ShouldEqual, false)
-		ok = cf.Delete([]byte("item1"))
-		c.So(ok, c.ShouldEqual, true)
-
-		ok = cf.Check([]byte("item1"))
-		c.So(ok, c.ShouldEqual, false)
-
-	})
-}
 func BytesToString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
-func TestCuckooLoadFrom(t *testing.T) {
-	c.Convey("TestCuckooLoadFrom", t, func() {
+func TestCuckoo(t *testing.T) {
+	cf := NewCuckooFilter(1000, 2, 500, 1)
+	defer cf.Release()
+
+	c.Convey("TestCuckoo", t, func() {
 		rdb := redis.NewClient(&redis.Options{
 			Addr:     "",
 			Password: "",
 			DB:       0,
 		})
-
 		headers := []byte{4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 20, 0, 1, 0}
 		hDump := &redis.ScanDumpCmd{}
 		hDump.SetVal(redis.ScanDump{Data: BytesToString(headers), Iter: 1})
@@ -61,21 +40,29 @@ func TestCuckooLoadFrom(t *testing.T) {
 		}
 		patches := gomonkey.ApplyFuncSeq((*redis.Client).CFScanDump, outSeq)
 		patches2 := gomonkey.ApplyFuncSeq((*redis.ScanDumpCmd).Val, outSeq2)
-
+	
 		defer patches.Reset()
 		defer patches2.Reset()
 		val := rdb.CFScanDump(context.Background(), "cf", 0).Val()
+	
+		// rdb.CFScanDump(context.Background(), "test2", 0).String()
 		dump := val.Data
-		cf := &GoCuckooFilterImpl{}
-		err := cf.LoadFrom(&RedisDump{Data: dump, Iter: uint64(val.Iter)})
-		c.So(err, c.ShouldEqual, nil)
-		c.So(cf.numItems, c.ShouldBeGreaterThan, 0)
+		cf.LoadFrom(dump, val.Iter)
 		val = rdb.CFScanDump(context.Background(), "cf", val.Iter).Val()
-		err = cf.LoadFrom(&RedisDump{Data: val.Data, Iter: uint64(val.Iter)})
-		c.So(err, c.ShouldEqual, nil)
+		// rdb.CFScanDump(context.Background(), "test2", 0).String()
+		dump = val.Data
+	
+		cf.LoadFrom(dump, val.Iter)
+		c.So(cf.Check([]byte("item1")), c.ShouldEqual, true)
+
 		ok := cf.Check([]byte("item3"))
 		c.So(ok, c.ShouldEqual, true)
 		ok = cf.Check([]byte("item3dddff"))
 		c.So(ok, c.ShouldEqual, false)
+		cf.Delete([]byte("item1"))
+		c.So(cf.Check([]byte("item1")), c.ShouldBeFalse)
+		cf.Insert([]byte("item6"), false)
+		c.So(cf.Check([]byte("item6")), c.ShouldBeTrue)
 	})
+
 }

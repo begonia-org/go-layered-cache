@@ -102,44 +102,20 @@ func (cf *RedCuckooFilter) Check(data []byte) bool {
 }
 
 func (cf *RedCuckooFilter) LoadFrom(dump string, iter int64) bool {
-	// hex_string = dump.encode("utf-8").hex()
-	// cData := C.CString(escapeString(dump))
+
 	cData := C.CBytes(StringToBytes(dump))
-	fmt.Printf("cData:%v,len:%d,iter:%d\n", unsafe.Sizeof(cData), len(StringToBytes(dump)), iter)
-	// val := C.CString(dump)
 
 	defer C.free(unsafe.Pointer(cData))
 	if iter == 1 {
-		// CuckooFilter *CFHeader_Load(const CFHeader *header)
 		if cf.filters != nil {
 			cf.Release()
 		}
 		cf.filters = C.CFHeader_Load((*C.CFHeader)(unsafe.Pointer(cData)))
-		if cf.filters == nil {
-			return false
-
-		}
-		return true
+		return cf.filters != nil
 	}
 
-	// // sds := C.sdsnew(cData)
-	// fmt.Println("dddsds:", sds)
-	// defer C.sdsfree(sds)
-
-	// length := C.get_sdshdr8_len_from_string(sds)
-	fmt.Println("iter:", unsafe.Sizeof(dump))
 	ret := uint(C.CF_LoadEncodedChunk(cf.filters, C.longlong(iter), (*C.char)(cData), C.size_t(unsafe.Sizeof(cData))))
 	fmt.Println("ret:", ret)
 	return ret == 1
-	// CF_LoadEncodedChunk(const CuckooFilter *cf, long long pos, const char *data, size_t datalen)
 
 }
-
-// func (cf *CuckooFilter) Dump() string {
-// 	// fillCFHeader(CFHeader *header, const CuckooFilter *cf)
-// 	// CFHeader header;
-// 	// fillCFHeader(&header, cf);
-// 	header := C.CFHeader{}
-// 	C.fillCFHeader(unsafe.Pointer(&header), cf.filters)
-
-// }

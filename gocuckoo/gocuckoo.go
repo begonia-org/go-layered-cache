@@ -298,7 +298,6 @@ func (cf *GoCuckooFilterImpl) LoadFrom(data interface{}) error {
 		header := &redisCFHeader{}
 
 		data := RedisStringToBytes(dump.Data)
-
 		if err := binary.Read(bytes.NewReader(data), binary.LittleEndian, header); err != nil {
 			return err
 		}
