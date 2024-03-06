@@ -13,7 +13,7 @@ import (
 
 func TestCuckoo(t *testing.T) {
 	c.Convey("TestCuckoo", t, func() {
-		cf := New(1000, 2, 500, 1)
+		cf := NewGoCuckooFilter(1000, 2, 500, 1)
 		hash := golayeredbloom.MurmurHash64A([]byte("item1"), 0)
 		c.So(hash, c.ShouldEqual, 8732656736511103026)
 		c.So(hash%255+1, c.ShouldEqual, 7)

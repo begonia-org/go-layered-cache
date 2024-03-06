@@ -81,8 +81,30 @@ type LookupParams struct {
 	Fp     CuckooFingerprint // Fingerprint
 	Unique bool
 }
-
-func New(capacity uint64, bucketSize uint16, maxIterations uint16, expansion uint16) GoCuckooFilter {
+// NewGoCuckooFilter creates a new instance of a GoCuckooFilter. This filter is an implementation
+// of the Cuckoo Filter algorithm, inspired by the implementation found in the RedisBloom project.
+// A Cuckoo Filter is an efficient data structure for fast determination of element membership
+// with a low false positive rate, particularly suitable for scenarios requiring quick lookups
+// and storage for large datasets.
+//
+// Parameters:
+// - capacity: The initial capacity of the filter, indicating the number of elements it can store.
+//             The actual capacity is adjusted to the nearest power of two based on the bucketSize.
+// - bucketSize: The number of elements each bucket can store. Buckets are the basic storage units
+//               used within the filter.
+// - maxIterations: The maximum number of iterations for an element to be kicked out of its original
+//                  position and attempt to find a new position during insertion. This parameter helps
+//                  prevent the insertion operation from entering an infinite loop.
+// - expansion: The multiplier for filter expansion. Expansion is achieved by increasing the number
+//              of buckets, and this parameter controls the degree of expansion.
+//
+// Returns:
+// A GoCuckooFilter instance that has been initialized and is ready for element addition and lookup operations.
+//
+// Note:
+// If the provided capacity or expansion is not a power of two, they will be adjusted to the nearest
+// larger power of two. This adjustment optimizes the internal structure of the filter for efficiency.
+func NewGoCuckooFilter(capacity uint64, bucketSize uint16, maxIterations uint16, expansion uint16) GoCuckooFilter {
 	filter := &GoCuckooFilterImpl{
 		expansion:     uint16(GetNextN2(uint64(expansion))),
 		bucketSize:    bucketSize,
@@ -309,6 +331,9 @@ func (cf *GoCuckooFilterImpl) LoadFrom(data interface{}) error {
 }
 
 // loadHeader loads the header from a RedisModuleString and sets the filter's fields accordingly.
+// 
+// Base on int CF_LoadHeader(const CuckooFilter *cf, const char *data, size_t datalen)
+// It will reinitialize the filter with the given header.
 func (cf *GoCuckooFilterImpl) loadHeader(header *redisCFHeader) {
 	cf.numBuckets = header.NumBuckets
 	cf.numFilters = uint16(header.NumFilters)

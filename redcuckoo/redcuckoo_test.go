@@ -1,4 +1,4 @@
-package golayeredbloom
+package redcuckoo
 
 import (
 	"context"

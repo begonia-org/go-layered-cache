@@ -1,10 +1,13 @@
 package cache
 
-import "github.com/allegro/bigcache/v3"
+import (
+	"github.com/allegro/bigcache/v3"
+)
 
+type SetOptions func(option interface{})
 type LocalCache interface {
 	Get(key string) ([]byte, error)
-	Set(key string, value []byte) error
+	Set(key string, value []byte, options ...SetOptions) error
 	Del(key string) error
 }
 
@@ -22,7 +25,10 @@ func (lc *LocalCacheImpl) Get(key string) ([]byte, error) {
 	return lc.BigCache.Get(key)
 }
 
-func (lc *LocalCacheImpl) Set(key string, value []byte) error {
+// Set key value
+//
+// NOTE
+func (lc *LocalCacheImpl) Set(key string, value []byte, options ...SetOptions) error {
 	return lc.BigCache.Set(key, value)
 }
 

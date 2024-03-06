@@ -2,11 +2,8 @@ package golayeredbloom
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
-	"strconv"
 )
 
 type TypeEnum int

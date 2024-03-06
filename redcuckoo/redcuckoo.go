@@ -1,8 +1,8 @@
-package golayeredbloom
+package redcuckoo
 
 /*
-#cgo CFLAGS: -I./RedisBloom/deps/murmur2 -I./RedisBloom/deps -I./RedisBloom/src -I./RedisBloom/deps/RedisModulesSDK/rmutil
-#cgo LDFLAGS: -L./lib -lbloom_filter -lm -Wl,-rpath,'$ORIGIN/lib'
+#cgo CFLAGS: -I../RedisBloom/deps/murmur2 -I../RedisBloom/deps -I../RedisBloom/src -I../RedisBloom/deps/RedisModulesSDK/rmutil
+#cgo LDFLAGS: -L../lib -lbloom_filter -lm -Wl,-rpath,'$ORIGIN/lib'
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +39,15 @@ func StringToBytes(s string) []byte {
 	byteHeader.Cap = stringHeader.Len
 
 	return b
+}
+
+func MurmurHash64ABloom(key []byte, seed uint64) uint64 {
+	ckey := C.CBytes(key)
+	defer C.free(ckey)
+
+	// 调用C函数
+	hash := C.MurmurHash64A_Bloom(ckey, C.int(len(key)), C.ulong(seed))
+	return uint64(hash)
 }
 func NewCuckooFilter(capacity uint, bucketSize, maxIterations, expansion uint) *RedCuckooFilter {
 

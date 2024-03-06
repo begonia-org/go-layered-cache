@@ -10,6 +10,14 @@ require (
 )
 
 require (
+	github.com/google/subcommands v1.2.0 // indirect
+	github.com/google/wire v0.6.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	golang.org/x/mod v0.15.0 // indirect
+	golang.org/x/tools v0.18.0 // indirect
+)
+
+require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2 // indirect
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
