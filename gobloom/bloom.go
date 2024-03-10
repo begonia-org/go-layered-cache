@@ -102,8 +102,24 @@ type dumpedChainHeader struct {
 	Growth   uint32
 	// Links    []dumpedChainLink // 在Go中，这样的动态数组需要特别处理
 }
-
-func NewGoBloom(entries uint64, errorRate float64, options GoBloomOptions) *GoBloomFilterImpl {
+type BloomBuildOptions struct {
+	Entries      uint64
+	Errors       float64
+	BloomOptions GoBloomOptions
+	Growth       uint8
+}
+// DefaultBuildBloomOptions is the default options for building a new bloom filter.
+// The options values same as the redisbloom C version.
+var DefaultBuildBloomOptions = &BloomBuildOptions{
+	Entries:      100,
+	Errors:       0.01,
+	BloomOptions: BLOOM_OPT_NOROUND | BLOOM_OPT_FORCE64 | BLOOM_OPT_NO_SCALING,
+	Growth:       2,
+}
+func NewGoBloom(buildOptions *BloomBuildOptions) *GoBloomFilterImpl {
+	entries:=buildOptions.Entries
+	errorRate:=buildOptions.Errors
+	options:=buildOptions.BloomOptions
 	if entries < 1 || errorRate <= 0 || errorRate >= 1.0 {
 		return nil
 	}

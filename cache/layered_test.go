@@ -7,63 +7,13 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/allegro/bigcache/v3"
+	golayeredcache "github.com/begonia-org/go-layered-cache"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	c "github.com/smartystreets/goconvey/convey"
 )
 
-func TestLoad(t *testing.T) {
-	c.Convey("TestLoad", t, func() {
-		ctx := context.Background()
-		RDB := redis.NewClient(&redis.Options{
-			Addr: "localhost:16379",
-			DB:   0,
-		})
-
-		cache := New(ctx, &LayeredCacheConfig{
-			Config: bigcache.DefaultConfig(10 * time.Minute),
-			RDB:    RDB,
-			Log:    logrus.New(),
-
-			ReadStrategy: LocalOnly,
-		})
-		patches := gomonkey.ApplyFuncReturn((*redis.Client).Scan, &redis.ScanCmd{})
-		patches.ApplyFuncReturn((*redis.ScanCmd).Result, []string{"cache:test:item1", "cache:test:item2", "cache:test:item2"}, uint64(0), nil)
-		outSeq := []gomonkey.OutputCell{
-			{
-				Values: gomonkey.Params{"1", nil},
-			},
-			{
-				Values: gomonkey.Params{"2", nil},
-			},
-			{
-				Values: gomonkey.Params{"3", nil},
-			},
-		}
-		argsSeq := []gomonkey.OutputCell{
-			{
-				Values: gomonkey.Params{[]interface{}{"0", "cache:test:item1"}},
-			},
-			{
-				Values: gomonkey.Params{[]interface{}{"0", "cache:test:item2"}},
-			},
-			{
-				Values: gomonkey.Params{[]interface{}{"0", "cache:test:item3"}},
-			},
-		}
-		patches = patches.ApplyFuncSeq((*redis.StringCmd).Result, outSeq)
-		patches = patches.ApplyFuncSeq((*redis.StringCmd).Args, argsSeq)
-		patches = patches.ApplyFuncReturn((*redis.Pipeline).Exec, nil, nil)
-		defer patches.Reset()
-		cache.LoadSourceCache(ctx, "cache:test:*")
-		time.Sleep(1 * time.Second)
-		value, err := cache.Get(ctx, "cache:test:item1")
-		c.So(err, c.ShouldBeNil)
-		c.So(string(value), c.ShouldEqual, "1")
-	})
-}
-func watcherMock() *gomonkey.Patches {
-	// patches := make([]*gomonkey.Patches, 0)
+func mockRedis() *gomonkey.Patches {
 	patches := gomonkey.ApplyFunc((*redis.Client).Process, func(cli *redis.Client, ctx context.Context, cmd redis.Cmder) error {
 		args := cmd.Args()
 		if len(args) > 2 {
@@ -77,73 +27,128 @@ func watcherMock() *gomonkey.Patches {
 		}
 		return nil
 	})
-
-	streamSeq := []gomonkey.OutputCell{
-		{
-			Values: gomonkey.Params{[]redis.XStream{{Stream: "cache:test:channel1:channel",
-				Messages: []redis.XMessage{
-					{ID: "1-0",
-						Values: map[string]interface{}{"value": "2", "key": "cache:test:item10"}}}}}, nil},
-		},
-		{
-			Values: gomonkey.Params{[]redis.XStream{{Stream: "cache:test:channel1:channel",
-				Messages: []redis.XMessage{
-					{ID: "1-0",
-						Values: map[string]interface{}{"value": "2", "key": "cache:test:item10", "op": "delete"}}}}}, nil},
-		},
+	iterSeq := []gomonkey.OutputCell{
+		{Values: gomonkey.Params{true}},  // 第一次调用返回
+		{Values: gomonkey.Params{false}}, // 第二次调用返回
 	}
-	patches = patches.ApplyFuncSeq((*redis.XStreamSliceCmd).Result, streamSeq)
+	patches.ApplyFuncSeq((*redis.ScanIterator).Next, iterSeq)
+	patches.ApplyFuncReturn((*redis.Client).Scan, &redis.ScanCmd{})
+	patches.ApplyFuncReturn((*redis.ScanCmd).Iterator, &redis.ScanIterator{})
+	patches.ApplyFuncReturn((*redis.ScanIterator).Val, "test:cache:item2")
+	patches.ApplyFuncReturn((*redis.StringCmd).Result, "item", nil)
 
+	// patches.ApplyFuncSeq((*redis.ScanDumpCmd).Result, outSeq2)
 
-	patches = patches.ApplyFuncReturn((*redis.Pipeline).Exec, nil, nil)
-
+	patches.ApplyFuncReturn((*redis.Pipeline).Exec, nil, nil)
 	return patches
+
 }
-func TestWatch(t *testing.T) {
-	c.Convey("TestWatch", t, func() {
+func TestLoad(t *testing.T) {
+	c.Convey("TestLoad", t, func() {
 		ctx := context.Background()
-		RDB := redis.NewClient(&redis.Options{
+
+		rdb := redis.NewClient(&redis.Options{
 			Addr: "localhost:16379",
 			DB:   0,
 		})
-		patches := watcherMock()
+		watcher := golayeredcache.WatchOptions{
+			Block:     3 * time.Second,
+			BatchSize: 1,
+			Channels:  []interface{}{"cache:test"},
+			WatcheAt:  "$",
+		}
+		patches := mockRedis()
 		defer patches.Reset()
-		cache := New(ctx, &LayeredCacheConfig{
-			Config:       bigcache.DefaultConfig(10 * time.Minute),
-			RDB:          RDB,
-			Log:          logrus.New(),
-			WatchKey:     "cache:test:channel1",
-			ReadStrategy: LocalOnly,
-		})
+		options := golayeredcache.LayeredBuildOptions{
+			RDB:       rdb,
+			Watcher:   &watcher,
+			KeyPrefix: "test:cache:*",
+			Entries:   1000,
+			Errors:    0.01,
+			Channel:   "cache:test",
+			Strategy:  golayeredcache.LocalOnly,
+			Log:       logrus.New(),
+		}
 
-		errChan := cache.WatchSource(ctx)
-		go func() {
-			for err := range errChan {
-				if err != nil {
-					t.Error(err)
-				}
-			}
-		}()
-
-		cache2 := New(ctx, &LayeredCacheConfig{
-			Config:       bigcache.DefaultConfig(10 * time.Minute),
-			RDB:          RDB,
-			Log:          logrus.New(),
-			WatchKey:     "cache:test:channel1",
-			ReadStrategy: LocalOnly,
-		})
-
-		err := cache2.Set(ctx, "cache:test:item10", []byte("2"), 0)
-		c.So(err, c.ShouldBeNil)
-		time.Sleep(1500 * time.Millisecond)
-		value, err := cache.Get(ctx, "cache:test:item10")
-		c.So(err, c.ShouldBeNil)
-		c.So(string(value), c.ShouldEqual, "2")
-		err = cache2.Del(ctx, "cache:test:item10")
+		defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
+		layered, _ := New(ctx, options, defaultBuildOptions)
+		err := layered.DumpSourceToLocal(ctx)
 		c.So(err, c.ShouldBeNil)
 		time.Sleep(1 * time.Second)
-		_, err = cache.Get(ctx, "cache:test:item10")
-		c.So(err, c.ShouldEqual,bigcache.ErrEntryNotFound)
 
+		value, err := layered.Get(ctx, "test:cache:item2")
+		c.So(err, c.ShouldBeNil)
+		c.So(len(value), c.ShouldEqual, 1)
+		c.So(string(value[0].([]byte)), c.ShouldEqual, "item")
+	})
+}
+
+func TestWatch(t *testing.T) {
+	c.Convey("TestWatch", t, func() {
+		ctx := context.Background()
+
+		rdb := redis.NewClient(&redis.Options{
+			Addr: "localhost:16379",
+			DB:   0,
+		})
+		watcher := golayeredcache.WatchOptions{
+			Block:     3 * time.Second,
+			BatchSize: 1,
+			Channels:  []interface{}{"cache:test:channel"},
+			WatcheAt:  "0-0",
+		}
+		patches := mockRedis()
+		defer patches.Reset()
+		options := golayeredcache.LayeredBuildOptions{
+			RDB:       rdb,
+			Watcher:   &watcher,
+			KeyPrefix: "test:cache:*",
+			Entries:   1000,
+			Errors:    0.01,
+			Channel:   "cache:test:channel",
+			Strategy:  golayeredcache.LocalOnly,
+			Log:       logrus.New(),
+		}
+
+		defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
+		layered1, _ := New(ctx, options, defaultBuildOptions)
+
+		err := layered1.Set(ctx, "test:cache:item2", []byte("item"))
+		c.So(err, c.ShouldBeNil)
+		// ctx1, _ := context.WithCancel(ctx)
+		pathch1 := gomonkey.ApplyFunc((*redis.XStreamSliceCmd).Result, func(_ *redis.XStreamSliceCmd) ([]redis.XStream, error) {
+			return []redis.XStream{{Stream: "cache:test:channel",
+				Messages: []redis.XMessage{{ID: "1-1",
+					Values: map[string]interface{}{"value": "item", "key": "test:cache:item2"}}}}}, nil
+
+		})
+		layered1.Watch(ctx)
+		layered2, _ := New(ctx, options, defaultBuildOptions)
+		time.Sleep(1500 * time.Millisecond)
+		// cancel()
+		// ctx2, _ := context.WithCancel(ctx)
+		layered2.Watch(ctx)
+		time.Sleep(2500 * time.Millisecond)
+		vals, err := layered2.Get(ctx, "test:cache:item2")
+		c.So(err, c.ShouldBeNil)
+		c.So(len(vals), c.ShouldEqual, 1)
+		c.So(string(vals[0].([]byte)), c.ShouldEqual, "item")
+		pathch1.Reset()
+
+		pathch2 := gomonkey.ApplyFunc((*redis.XStreamSliceCmd).Result, func(_ *redis.XStreamSliceCmd) ([]redis.XStream, error) {
+			return []redis.XStream{{Stream: "cache:test:channel",
+				Messages: []redis.XMessage{{ID: "1-2",
+					Values: map[string]interface{}{"value": "item", "key": "test:cache:item2", "op": "delete"}}}}}, nil
+
+		})
+		err = layered2.Del(ctx, "test:cache:item2")
+		c.So(err, c.ShouldBeNil)
+
+		time.Sleep(3500 * time.Millisecond)
+		vals, err = layered1.Get(ctx, "test:cache:item2")
+
+		c.So(err, c.ShouldEqual, bigcache.ErrEntryNotFound)
+		c.So(len(vals), c.ShouldEqual, 0)
+		pathch2.Reset()
 	})
 }

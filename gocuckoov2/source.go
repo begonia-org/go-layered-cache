@@ -1,4 +1,4 @@
-package gobloom
+package gocuckoo
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type BloomSourceImpl struct {
+type CuckooSourceImpl struct {
 	*golayeredcache.DataSourceFromRedis
 	channel string
 	cancel  context.CancelFunc
@@ -19,13 +19,13 @@ type LocalBloomFilter interface {
 	Add(data []byte) bool
 }
 
-func (bs *BloomSourceImpl) Get(ctx context.Context, key string, values ...interface{}) ([]interface{}, error) {
+func (bs *CuckooSourceImpl) Get(ctx context.Context, key string, values ...interface{}) ([]interface{}, error) {
 	args := make([]interface{}, len(values))
 	for i, v := range values {
 		arg := []interface{}{key, v}
 		args[i] = arg
 	}
-	vals, err := bs.DataSourceFromRedis.GetExec(ctx, "BF.EXISTS", args...)
+	vals, err := bs.DataSourceFromRedis.GetExec(ctx, "CF.EXISTS", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (bs *BloomSourceImpl) Get(ctx context.Context, key string, values ...interf
 	return result, nil
 }
 
-func (bs *BloomSourceImpl) Set(ctx context.Context, key string, values ...interface{}) error {
+func (bs *CuckooSourceImpl) Set(ctx context.Context, key string, values ...interface{}) error {
 	args := make([]interface{}, len(values))
 	messages := make([]interface{}, len(values))
 	for i, v := range values {
@@ -48,7 +48,7 @@ func (bs *BloomSourceImpl) Set(ctx context.Context, key string, values ...interf
 			return fmt.Errorf("value is not []byte or empty")
 		}
 
-		arg := []interface{}{key, data}
+		arg := []interface{}{key, string(data)}
 		args[i] = arg
 		messages[i] = map[string]interface{}{
 			"key":   key,
@@ -57,13 +57,40 @@ func (bs *BloomSourceImpl) Set(ctx context.Context, key string, values ...interf
 	}
 	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
 		Channel:      bs.channel,
-		Cmd:          "BF.ADD",
+		Cmd:          "CF.ADD",
 		CmdArgs:      args,
 		SendMessages: messages,
 	})
 }
+func (bs *CuckooSourceImpl) Del(ctx context.Context, key interface{}, args ...interface{}) error {
+	args2 := make([]interface{}, len(args))
+	messages := make([]interface{}, len(args))
+	for i, v := range args {
+		if v == nil {
+			continue
+		}
+		data, ok := v.([]byte)
+		if !ok || len(data) == 0 {
+			return fmt.Errorf("value is not []byte or empty")
+		}
 
-func (bs *BloomSourceImpl) Dump(ctx context.Context, key interface{}, args ...interface{}) <-chan interface{} {
+		arg := []interface{}{key, data}
+		args2[i] = arg
+		messages[i] = map[string]interface{}{
+			"key":   key,
+			"value": data,
+			"op":    "delete",
+		}
+	}
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+		Channel:      bs.channel,
+		Cmd:          "CF.DEL",
+		CmdArgs:      args2,
+		SendMessages: messages,
+	})
+}
+
+func (bs *CuckooSourceImpl) Dump(ctx context.Context, key interface{}, args ...interface{}) <-chan interface{} {
 	ch := make(chan interface{})
 	go func() {
 		var iter int64 = 0
@@ -74,7 +101,7 @@ func (bs *BloomSourceImpl) Dump(ctx context.Context, key interface{}, args ...in
 			case <-ctx.Done():
 				return
 			default:
-				data, next, err := bs.DataSourceFromRedis.BFScanDump(ctx, keyStr, iter)
+				data, next, err := bs.DataSourceFromRedis.CFScanDump(ctx, keyStr, iter)
 				iter = next
 				if err != nil {
 					ch <- err
@@ -90,12 +117,12 @@ func (bs *BloomSourceImpl) Dump(ctx context.Context, key interface{}, args ...in
 	return ch
 
 }
-func (bs *BloomSourceImpl) UnWatch(ctx context.Context) error {
+func (bs *CuckooSourceImpl) UnWatch(ctx context.Context) error {
 	return bs.DataSourceFromRedis.UnWatch(ctx, bs.cancel)
 }
 
-func NewBloomSourceImpl(source *golayeredcache.DataSourceFromRedis, channel string, log *logrus.Logger) *BloomSourceImpl {
-	return &BloomSourceImpl{
+func NewCuckooSourceImpl(source *golayeredcache.DataSourceFromRedis, channel string, log *logrus.Logger) *CuckooSourceImpl {
+	return &CuckooSourceImpl{
 		DataSourceFromRedis: source,
 		channel:             channel,
 		log:                 log,

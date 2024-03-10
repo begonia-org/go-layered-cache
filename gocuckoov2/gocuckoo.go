@@ -1,14 +1,11 @@
 package gocuckoo
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 
-	golayeredbloom "github.com/begonia-org/go-layered-bloom"
+	golayeredcache "github.com/begonia-org/go-layered-cache"
 )
 
 // Equivalent to `typedef uint8_t CuckooFingerprint;`
@@ -81,6 +78,22 @@ type LookupParams struct {
 	Fp     CuckooFingerprint // Fingerprint
 	Unique bool
 }
+type CuckooBuildOptions struct {
+	Entries       uint64
+	BucketSize    uint16
+	MaxIterations uint16
+	Expansion     uint16
+}
+
+// DefaultBuildBloomOptions is the default options for building a new bloom filter.
+// The options values same as the redisbloom C version.
+var DefaultBuildBloomOptions = &CuckooBuildOptions{
+	MaxIterations: 20,
+	Expansion:     1,
+	BucketSize:    2,
+	Entries:       1024,
+}
+
 // NewGoCuckooFilter creates a new instance of a GoCuckooFilter. This filter is an implementation
 // of the Cuckoo Filter algorithm, inspired by the implementation found in the RedisBloom project.
 // A Cuckoo Filter is an efficient data structure for fast determination of element membership
@@ -88,15 +101,15 @@ type LookupParams struct {
 // and storage for large datasets.
 //
 // Parameters:
-// - capacity: The initial capacity of the filter, indicating the number of elements it can store.
-//             The actual capacity is adjusted to the nearest power of two based on the bucketSize.
-// - bucketSize: The number of elements each bucket can store. Buckets are the basic storage units
-//               used within the filter.
-// - maxIterations: The maximum number of iterations for an element to be kicked out of its original
-//                  position and attempt to find a new position during insertion. This parameter helps
-//                  prevent the insertion operation from entering an infinite loop.
-// - expansion: The multiplier for filter expansion. Expansion is achieved by increasing the number
-//              of buckets, and this parameter controls the degree of expansion.
+//   - capacity: The initial capacity of the filter, indicating the number of elements it can store.
+//     The actual capacity is adjusted to the nearest power of two based on the bucketSize.
+//   - bucketSize: The number of elements each bucket can store. Buckets are the basic storage units
+//     used within the filter.
+//   - maxIterations: The maximum number of iterations for an element to be kicked out of its original
+//     position and attempt to find a new position during insertion. This parameter helps
+//     prevent the insertion operation from entering an infinite loop.
+//   - expansion: The multiplier for filter expansion. Expansion is achieved by increasing the number
+//     of buckets, and this parameter controls the degree of expansion.
 //
 // Returns:
 // A GoCuckooFilter instance that has been initialized and is ready for element addition and lookup operations.
@@ -104,12 +117,12 @@ type LookupParams struct {
 // Note:
 // If the provided capacity or expansion is not a power of two, they will be adjusted to the nearest
 // larger power of two. This adjustment optimizes the internal structure of the filter for efficiency.
-func NewGoCuckooFilter(capacity uint64, bucketSize uint16, maxIterations uint16, expansion uint16) GoCuckooFilter {
+func NewGoCuckooFilter(options *CuckooBuildOptions) *GoCuckooFilterImpl {
 	filter := &GoCuckooFilterImpl{
-		expansion:     uint16(GetNextN2(uint64(expansion))),
-		bucketSize:    bucketSize,
-		maxIterations: maxIterations,
-		numBuckets:    GetNextN2(capacity / uint64(bucketSize)),
+		expansion:     uint16(GetNextN2(uint64(options.Expansion))),
+		bucketSize:    options.BucketSize,
+		maxIterations: options.MaxIterations,
+		numBuckets:    GetNextN2(options.Entries / uint64(options.BucketSize)),
 		mux:           sync.RWMutex{},
 	}
 	filter.Grow()
@@ -185,7 +198,7 @@ func (cf *GoCuckooFilterImpl) KOInsert(params *LookupParams, curFilter *SubCF) e
 // InsertFP inserts a fingerprint into the filter, returning an error if the filter is full.
 // static CuckooInsertStatus CuckooFilter_InsertFP(CuckooFilter *filter, const LookupParams *params)
 func (cf *GoCuckooFilterImpl) Insert(val []byte) error {
-	params := NewLookupParams(CuckooHash(golayeredbloom.MurmurHash64A(val, 0)))
+	params := NewLookupParams(CuckooHash(golayeredcache.MurmurHash64A(val, 0)))
 	if params.Unique && cf.Check(val) {
 		return nil
 	}
@@ -222,7 +235,7 @@ func (cf *GoCuckooFilterImpl) insert(params *LookupParams) error {
 // Check returns true if the filter contains the given fingerprint.
 // static int CuckooFilter_CheckFP(const CuckooFilter *filter, const LookupParams *params)
 func (cf *GoCuckooFilterImpl) Check(val []byte) bool {
-	params := NewLookupParams(CuckooHash(golayeredbloom.MurmurHash64A(val, 0)))
+	params := NewLookupParams(CuckooHash(golayeredcache.MurmurHash64A(val, 0)))
 	cf.mux.RLock()
 	defer cf.mux.RUnlock()
 	for ii := 0; ii < int(cf.numFilters); ii++ {
@@ -236,7 +249,7 @@ func (cf *GoCuckooFilterImpl) Check(val []byte) bool {
 // Delete removes the fingerprint from the filter, returning true if the fingerprint was found.
 // int CuckooFilter_Delete(CuckooFilter *filter, CuckooHash hash)
 func (cf *GoCuckooFilterImpl) Delete(val []byte) bool {
-	params := NewLookupParams(CuckooHash(golayeredbloom.MurmurHash64A(val, 0)))
+	params := NewLookupParams(CuckooHash(golayeredcache.MurmurHash64A(val, 0)))
 	cf.mux.Lock()
 	defer cf.mux.Unlock()
 	for _, filter := range cf.filters {
@@ -309,91 +322,91 @@ func (cf *GoCuckooFilterImpl) compact(cont bool) {
 	cf.numDeletes = 0
 }
 
-func (cf *GoCuckooFilterImpl) LoadFrom(data interface{}) error {
-	dump, ok := data.(*RedisDump)
-	if !ok {
-		return errors.New("invalid data type")
-	}
-	cf.mux.Lock()
-	defer cf.mux.Unlock()
-	if dump.Iter == 1 {
-		header := &redisCFHeader{}
+// func (cf *GoCuckooFilterImpl) LoadFrom(data interface{}) error {
+// 	dump, ok := data.(*RedisDump)
+// 	if !ok {
+// 		return errors.New("invalid data type")
+// 	}
+// 	cf.mux.Lock()
+// 	defer cf.mux.Unlock()
+// 	if dump.Iter == 1 {
+// 		header := &redisCFHeader{}
 
-		data := RedisStringToBytes(dump.Data)
-		if err := binary.Read(bytes.NewReader(data), binary.LittleEndian, header); err != nil {
-			return err
-		}
-		cf.loadHeader(header)
-		return nil
-	}
-	return cf.loadDump(dump)
+// 		data := RedisStringToBytes(dump.Data)
+// 		if err := binary.Read(bytes.NewReader(data), binary.LittleEndian, header); err != nil {
+// 			return err
+// 		}
+// 		cf.loadHeader(header)
+// 		return nil
+// 	}
+// 	return cf.loadDump(dump)
 
-}
+// }
 
-// loadHeader loads the header from a RedisModuleString and sets the filter's fields accordingly.
-// 
-// Base on int CF_LoadHeader(const CuckooFilter *cf, const char *data, size_t datalen)
-// It will reinitialize the filter with the given header.
-func (cf *GoCuckooFilterImpl) loadHeader(header *redisCFHeader) {
-	cf.numBuckets = header.NumBuckets
-	cf.numFilters = uint16(header.NumFilters)
-	cf.numItems = header.NumItems
-	cf.numDeletes = header.NumDeletes
-	cf.bucketSize = header.BucketSize
-	cf.maxIterations = header.MaxIterations
-	cf.expansion = header.Expansion
-	cf.filters = make([]*SubCF, cf.numFilters)
+// // loadHeader loads the header from a RedisModuleString and sets the filter's fields accordingly.
+// //
+// // Base on int CF_LoadHeader(const CuckooFilter *cf, const char *data, size_t datalen)
+// // It will reinitialize the filter with the given header.
+// func (cf *GoCuckooFilterImpl) loadHeader(header *redisCFHeader) {
+// 	cf.numBuckets = header.NumBuckets
+// 	cf.numFilters = uint16(header.NumFilters)
+// 	cf.numItems = header.NumItems
+// 	cf.numDeletes = header.NumDeletes
+// 	cf.bucketSize = header.BucketSize
+// 	cf.maxIterations = header.MaxIterations
+// 	cf.expansion = header.Expansion
+// 	cf.filters = make([]*SubCF, cf.numFilters)
 
-	for ii := 0; ii < int(cf.numFilters); ii++ {
-		numBuckets := cf.numBuckets * uint64(math.Pow(float64(cf.expansion), float64(ii)))
-		cf.filters[ii] = &SubCF{
-			BucketSize: uint8(cf.bucketSize),
-			NumBuckets: numBuckets,
-			Data:       allocateCuckooBuckets(int(numBuckets), int(cf.bucketSize)),
-		}
-	}
-}
+// 	for ii := 0; ii < int(cf.numFilters); ii++ {
+// 		numBuckets := cf.numBuckets * uint64(math.Pow(float64(cf.expansion), float64(ii)))
+// 		cf.filters[ii] = &SubCF{
+// 			BucketSize: uint8(cf.bucketSize),
+// 			NumBuckets: numBuckets,
+// 			Data:       allocateCuckooBuckets(int(numBuckets), int(cf.bucketSize)),
+// 		}
+// 	}
+// }
 
-// loadDump loads a ReddisModuleString into the filter at the given position.
-// int CF_LoadEncodedChunk(const CuckooFilter *cf, long long pos, const char *data, size_t datalen)
-func (cf *GoCuckooFilterImpl) loadDump(dump *RedisDump) error {
-	data := RedisStringToBytes(dump.Data)
-	if dump.Iter == 1 {
-		return fmt.Errorf("invalid iter:%d", dump.Iter)
-	}
-	datalen := len(data)
-	if datalen == 0 || dump.Iter <= 0 || uint64(dump.Iter-1) < uint64(datalen) {
-		return fmt.Errorf("invalid data len:%d,iter:%d", datalen, dump.Iter)
-	}
-	offset := dump.Iter - uint64(datalen) - 1
-	var currentSize uint64
-	var filterIx int = 0
-	var filter *SubCF
-	for filterIx < int(cf.numFilters) {
-		filter = cf.filters[filterIx]
+// // loadDump loads a ReddisModuleString into the filter at the given position.
+// // int CF_LoadEncodedChunk(const CuckooFilter *cf, long long pos, const char *data, size_t datalen)
+// func (cf *GoCuckooFilterImpl) loadDump(dump *RedisDump) error {
+// 	data := RedisStringToBytes(dump.Data)
+// 	if dump.Iter == 1 {
+// 		return fmt.Errorf("invalid iter:%d", dump.Iter)
+// 	}
+// 	datalen := len(data)
+// 	if datalen == 0 || dump.Iter <= 0 || uint64(dump.Iter-1) < uint64(datalen) {
+// 		return fmt.Errorf("invalid data len:%d,iter:%d", datalen, dump.Iter)
+// 	}
+// 	offset := dump.Iter - uint64(datalen) - 1
+// 	var currentSize uint64
+// 	var filterIx int = 0
+// 	var filter *SubCF
+// 	for filterIx < int(cf.numFilters) {
+// 		filter = cf.filters[filterIx]
 
-		currentSize = uint64(filter.BucketSize) * filter.NumBuckets
-		if offset < currentSize {
-			break
-		}
-		offset -= currentSize
-		filterIx++
-	}
-	if filter == nil || (offset > math.MaxUint64-uint64(datalen)) || uint64(filter.BucketSize)*filter.NumBuckets < offset+uint64(datalen) {
-		return fmt.Errorf("invalid filter,%v,offset:%d", filter, offset)
-	}
-	// copy data to filter
-	for i := 0; i < datalen; i++ {
-		// 计算二维数组的具体位置
-		bucketIndex := (int(offset) + i) / int(filter.BucketSize)
-		bucketOffset := (int(offset) + i) % int(filter.BucketSize)
-		if bucketIndex < len(filter.Data) && bucketOffset < len(filter.Data[bucketIndex]) {
+// 		currentSize = uint64(filter.BucketSize) * filter.NumBuckets
+// 		if offset < currentSize {
+// 			break
+// 		}
+// 		offset -= currentSize
+// 		filterIx++
+// 	}
+// 	if filter == nil || (offset > math.MaxUint64-uint64(datalen)) || uint64(filter.BucketSize)*filter.NumBuckets < offset+uint64(datalen) {
+// 		return fmt.Errorf("invalid filter,%v,offset:%d", filter, offset)
+// 	}
+// 	// copy data to filter
+// 	for i := 0; i < datalen; i++ {
+// 		// 计算二维数组的具体位置
+// 		bucketIndex := (int(offset) + i) / int(filter.BucketSize)
+// 		bucketOffset := (int(offset) + i) % int(filter.BucketSize)
+// 		if bucketIndex < len(filter.Data) && bucketOffset < len(filter.Data[bucketIndex]) {
 
-			filter.Data[bucketIndex][bucketOffset] = data[i]
-		} else {
-			// 超出界限
-			return fmt.Errorf("out of range")
-		}
-	}
-	return nil
-}
+// 			filter.Data[bucketIndex][bucketOffset] = data[i]
+// 		} else {
+// 			// 超出界限
+// 			return fmt.Errorf("out of range")
+// 		}
+// 	}
+// 	return nil
+// }

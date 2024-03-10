@@ -31,7 +31,9 @@ func NewGoBloomChain(initsize uint64, errorRate float64, options GoBloomOptions,
 	if initsize == 0 || errorRate == 0 || errorRate >= 1 {
 		return nil
 	}
-	sb := &GoBloomChain{}
+	sb := &GoBloomChain{
+		mux:	  sync.RWMutex{},
+	}
 	sb.growth = growth
 	sb.options = options
 	// tightening：该层错误率（第一层的错误率 = BloomFilter初始化时设置的错误率 * 0.5，第二层为第一层的0.5倍，以此类推，ratio与expansion无关;
@@ -44,8 +46,14 @@ func NewGoBloomChain(initsize uint64, errorRate float64, options GoBloomOptions,
 }
 
 func (bc *GoBloomChain) addLink(size uint64, errorRate float64) {
+	buildOption := &BloomBuildOptions{
+		Entries: size,
 
-	bc.filters = append(bc.filters, NewGoBloom(size, errorRate, bc.options))
+		Errors:       errorRate,
+		BloomOptions: bc.options,
+		Growth:       bc.growth,
+	}
+	bc.filters = append(bc.filters, NewGoBloom(buildOption))
 	bc.nfilters++
 }
 

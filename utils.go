@@ -1,4 +1,4 @@
-package golayeredbloom
+package golayeredcache
 
 import (
 	"bytes"

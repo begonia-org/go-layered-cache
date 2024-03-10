@@ -36,7 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-package golayeredbloom
+package golayeredcache
 
 import (
 	"math/bits"

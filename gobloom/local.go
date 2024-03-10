@@ -13,6 +13,7 @@ import (
 type LocalBloomFilters struct {
 	filters map[string]*GoBloomChain
 	mux     sync.RWMutex
+	bloomBuildOptions *BloomBuildOptions
 }
 
 func (lbf *LocalBloomFilters) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error) {
@@ -34,11 +35,15 @@ func (lbf *LocalBloomFilters) Get(ctx context.Context, key interface{}, args ...
 	return result, nil
 }
 func (lbf *LocalBloomFilters) Set(ctx context.Context, key interface{}, args ...interface{}) error {
-	lbf.mux.RLock()
-	defer lbf.mux.RUnlock()
+	lbf.mux.Lock()
+	defer lbf.mux.Unlock()
 	f, ok := lbf.filters[key.(string)]
 	if !ok {
-		return fmt.Errorf("not found such bloom filter %s", key)
+		f=NewGoBloomChain(lbf.bloomBuildOptions.Entries,lbf.bloomBuildOptions.Errors,lbf.bloomBuildOptions.BloomOptions,lbf.bloomBuildOptions.Growth)
+		if f == nil {
+			return fmt.Errorf("create bloom filter failed")
+		}
+		lbf.filters[key.(string)] = f
 	}
 	for _, arg := range args {
 		f.Add(arg.([]byte))
@@ -51,60 +56,10 @@ func (lbf *LocalBloomFilters) AddFilter(key string, filter *GoBloomChain) {
 	lbf.filters[key] = filter
 }
 
-// SBChain *SB_NewChainFromHeader(const char *buf, size_t bufLen, const char **errmsg) {
-//     const dumpedChainHeader *header = (const void *)buf;
-//     if (bufLen < sizeof(dumpedChainHeader)) {
-//         *errmsg = "ERR received bad data"; // LCOV_EXCL_LINE
-//         return NULL;                       // LCOV_EXCL_LINE
-//     }
 
-//     if (bufLen != sizeof(*header) + (sizeof(header->links[0]) * header->nfilters)) {
-//         *errmsg = "ERR received bad data"; // LCOV_EXCL_LINE
-//         return NULL;                       // LCOV_EXCL_LINE
-//     }
-
-//     SBChain *sb = RedisModule_Calloc(1, sizeof(*sb));
-//     sb->filters = RedisModule_Calloc(header->nfilters, sizeof(*sb->filters));
-//     sb->nfilters = header->nfilters;
-//     sb->options = header->options;
-//     sb->size = header->size;
-//     sb->growth = header->growth;
-
-//     for (size_t ii = 0; ii < header->nfilters; ++ii) {
-//         SBLink *dstlink = sb->filters + ii;
-//         const dumpedChainLink *srclink = header->links + ii;
-// #define X(encfld, dstfld) dstfld = encfld;
-//         X_ENCODED_LINK(X, srclink, dstlink)
-// #undef X
-
-//         if (bloom_validate_integrity(&dstlink->inner) != 0) {
-//             SBChain_Free(sb);
-//             *errmsg = "ERR received bad data";
-//             return NULL;
-//         }
-
-//         dstlink->inner.bf = RedisModule_Calloc(1, dstlink->inner.bytes);
-//         if (sb->options & BLOOM_OPT_FORCE64) {
-//             dstlink->inner.force64 = 1;
-//         }
-//     }
-
-//     if (SB_ValidateIntegrity(sb) != 0) {
-//         SBChain_Free(sb);
-//         *errmsg = "ERR received bad data";
-//         return NULL;
-//     }
-
-//     return sb;
-// }
 
 func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
-	// file, _ := os.Create("/data/work/begonia/go-layered-bloom/gobloom/testdata/header.bin")
 
-	// defer file.Close() // 确保在函数返回前关闭文件
-
-	// // 将数据写入文件
-	// _, _ = file.Write(data)
 	header := dumpedChainHeader{}
 	headerSize := binary.Size(dumpedChainHeader{})
 	if len(data) < headerSize {
@@ -142,33 +97,7 @@ func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
 	return nil
 }
 
-// static SBLink *getLinkPos(const SBChain *sb, long long curIter, size_t *offset) {
-//     if (curIter < 1) {
-//         return NULL;
-//     }
 
-//     curIter--;
-//     SBLink *link = NULL;
-
-//     // Read iterator
-//     size_t seekPos = 0;
-
-//     for (size_t ii = 0; ii < sb->nfilters; ++ii) {
-//         if (seekPos + sb->filters[ii].inner.bytes > curIter) {
-//             link = sb->filters + ii;
-//             break;
-//         } else {
-//             seekPos += sb->filters[ii].inner.bytes;
-//         }
-//     }
-//     if (!link) {
-//         return NULL;
-//     }
-
-//	    curIter -= seekPos;
-//	    *offset = curIter;
-//	    return link;
-//	}
 func (lbf *LocalBloomFilters) pos(key string, iter int64) (GoBloomFilter, uint64) {
 	lbf.mux.RLock()
 	defer lbf.mux.RUnlock()
@@ -197,38 +126,9 @@ func (lbf *LocalBloomFilters) pos(key string, iter int64) (GoBloomFilter, uint64
 	return link, uint64(curIter)
 }
 
-// int SBChain_LoadEncodedChunk(SBChain *sb, long long iter, const char *buf, size_t bufLen,
-// 	const char **errmsg) {
-// if (!buf || iter <= 0 || iter < bufLen) {
-// *errmsg = "ERR received bad data";
-// return -1;
-// }
-// // Load the chunk
-// size_t offset;
-// iter -= bufLen;
 
-// SBLink *link = getLinkPos(sb, iter, &offset);
-// if (!link) {
-// *errmsg = "ERR invalid offset - no link found"; // LCOV_EXCL_LINE
-// return -1;                                      // LCOV_EXCL_LINE
-// }
-
-// if (bufLen > link->inner.bytes - offset) {
-// *errmsg = "ERR invalid chunk - Too big for current filter"; // LCOV_EXCL_LINE
-// return -1;                                                  // LCOV_EXCL_LINE
-// }
-
-// // printf("Copying to %p. Offset=%lu, Len=%lu\n", link, offset, bufLen);
-// memcpy(link->inner.bf + offset, buf, bufLen);
-// return 0;
-// }
 func (lbf *LocalBloomFilters) loadDump(key string, iter uint64, data []byte) error {
-	// file, _ := os.Create("/data/work/begonia/go-layered-bloom/gobloom/testdata/bloom.bin")
 
-	// defer file.Close() // 确保在函数返回前关闭文件
-
-	// // 将数据写入文件
-	// _, _ = file.Write(data)
 	bufLen := len(data)
 	if bufLen == 0 || iter <= 0 || int64(iter) < int64(bufLen) {
 		return fmt.Errorf("received bad data")
@@ -239,9 +139,7 @@ func (lbf *LocalBloomFilters) loadDump(key string, iter uint64, data []byte) err
 	if link == nil {
 		return fmt.Errorf("invalid offset - no link found")
 	}
-	// for i:=0;i<bufLen;i++{
-	// 	link.SetBit(offset+uint64(i),uint8(data[i]))
-	// }
+
 	return link.LoadBytes(offset, data)
 }
 func (lbf *LocalBloomFilters) Load(ctx context.Context, key interface{}, args ...interface{}) error {
@@ -263,8 +161,9 @@ func (lbf *LocalBloomFilters) Load(ctx context.Context, key interface{}, args ..
 
 }
 
-func NewLocalBloomFilters(filters map[string]*GoBloomChain) *LocalBloomFilters {
+func NewLocalBloomFilters(filters map[string]*GoBloomChain,buildOptions *BloomBuildOptions) *LocalBloomFilters {
 	return &LocalBloomFilters{
 		filters: filters,
+		bloomBuildOptions:buildOptions,
 	}
 }
