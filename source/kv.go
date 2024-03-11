@@ -1,15 +1,14 @@
-package cache
+package source
 
 import (
 	"context"
 	"fmt"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
 	"github.com/sirupsen/logrus"
 )
 
 type CacheSourceImpl struct {
-	*golayeredcache.DataSourceFromRedis
+	*DataSourceFromRedis
 	channel string
 	cancel  context.CancelFunc
 	log     *logrus.Logger
@@ -49,7 +48,7 @@ func (bs *CacheSourceImpl) Set(ctx context.Context, key string, values ...interf
 			"value": data,
 		}
 	}
-	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "SET",
 		CmdArgs:      args,
@@ -64,7 +63,7 @@ func (bs *CacheSourceImpl) Del(ctx context.Context, key interface{}, args ...int
 		"value": "",
 		"op":    "delete",
 	}}
-	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "DEL",
 		CmdArgs:      args2,
@@ -93,7 +92,7 @@ func (bs *CacheSourceImpl) UnWatch(ctx context.Context) error {
 	return bs.DataSourceFromRedis.UnWatch(ctx, bs.cancel)
 }
 
-func NewCacheSourceImpl(source *golayeredcache.DataSourceFromRedis, channel string, log *logrus.Logger) *CacheSourceImpl {
+func NewCacheSourceImpl(source *DataSourceFromRedis, channel string, log *logrus.Logger) *CacheSourceImpl {
 	return &CacheSourceImpl{
 		DataSourceFromRedis: source,
 		channel:             channel,

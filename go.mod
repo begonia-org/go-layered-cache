@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/agiledragon/gomonkey/v2 v2.11.0
-	github.com/google/wire v0.6.0
 	github.com/smartystreets/goconvey v1.8.1
 )
 

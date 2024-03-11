@@ -1,4 +1,4 @@
-package golayeredcache
+package source
 
 import (
 	"context"
@@ -20,14 +20,27 @@ type OnScan func(context.Context, interface{}) error
 type DataSource interface {
 	Get(ctx context.Context, key string, args ...interface{}) ([]interface{}, error)
 	Set(ctx context.Context, key string, args ...interface{}) error
-	// Del(ctx context.Context, key string, args ...interface{}) error
 	Watch(ctx context.Context, onMessage OnMessage) (<-chan error, context.CancelFunc)
 	Scan(ctx context.Context, pattern string, onRecv OnScan) <-chan error
 	Dump(ctx context.Context, key interface{}, args ...interface{}) <-chan interface{}
 }
-type BloomSource interface {
+
+type KeyValueCacheSource interface {
+	DataSource
+	GetValue(ctx context.Context, key string) ([]byte, error)
+	SetValue(ctx context.Context, key string, value []byte) error
 }
 
+type FilterSource interface {
+	DataSource
+	Check(ctx context.Context, key string, value []byte) bool
+	Add(ctx context.Context, key string, value []byte) error
+}
+
+type CuckooSource interface {
+	FilterSource
+	Del(ctx context.Context, key string, value []byte) error
+}
 type DataSourceFromRedis struct {
 	rdb     *redis.Client
 	watcher *WatchOptions
@@ -177,7 +190,7 @@ func (d *DataSourceFromRedis) Watch(ctx context.Context, onMessage OnMessage) (<
 					Block:   d.watcher.Block,
 				})
 				messages, err := xstream.Result()
-				if err != nil&& err != redis.Nil{
+				if err != nil && err != redis.Nil {
 					ch <- fmt.Errorf("xread:%w", err)
 					continue
 				}

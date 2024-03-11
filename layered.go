@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/begonia-org/go-layered-cache/gocuckoo"
+	"github.com/begonia-org/go-layered-cache/local"
+	"github.com/begonia-org/go-layered-cache/source"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
@@ -20,10 +23,17 @@ const (
 type WithDelOperator interface {
 	Del(ctx context.Context, key interface{}, args ...interface{}) error
 }
+type Watcher interface {
+	Watch(ctx context.Context) <-chan error
+	UnWatch() error
+}
+type Loader interface {
+	DumpSourceToLocal(ctx context.Context) error
+}
 type LayeredCache interface {
-	Get(ctx context.Context, key interface{}, args ...interface{}) (interface{}, error)
+	Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
 	Set(ctx context.Context, key interface{}, args ...interface{}) error
-	GetFromLocal(ctx context.Context, key interface{}, args ...interface{}) (interface{}, error)
+	GetFromLocal(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
 	SetToLocal(ctx context.Context, key interface{}, args ...interface{}) error
 
 	Watch(ctx context.Context) <-chan error
@@ -31,22 +41,52 @@ type LayeredCache interface {
 	OnMessage(ctx context.Context, from string, message interface{}) error
 	DumpSourceToLocal(ctx context.Context) error
 }
+type LayeredKeyValueCache interface {
+	// LayeredCache
+	Watcher
+	Loader
+	Get(ctx context.Context, key string) ([]byte, error)
+	Set(ctx context.Context, key string, value []byte) error
+	Del(ctx context.Context, key string) error
+}
+type LayeredFilter interface {
+	Watcher
+	Loader
+	Check(ctx context.Context, key string, value []byte) (bool, error)
+	Add(ctx context.Context, key string, value []byte) error
+}
+type LayeredCuckooFilter interface {
+	LayeredFilter
+	Del(ctx context.Context, key string, value []byte) error
+}
+
+
 type LayeredBuildOptions struct {
+	RDB     *redis.Client
+	Watcher *source.WatchOptions
+	Log     *logrus.Logger
+
+	Channel   interface{}
+	KeyPrefix string
+	Strategy  CacheReadStrategy
+}
+type LayeredCuckooFilterOptions struct {
 	RDB                       *redis.Client
-	Watcher                   *WatchOptions
+	Watcher                   *source.WatchOptions
 	Log                       *logrus.Logger
 	Entries                   uint64
 	Errors                    float64
 	Channel                   interface{}
 	KeyPrefix                 string
 	Strategy                  CacheReadStrategy
-	
+	DefaultBuildCuckooOptions *gocuckoo.CuckooBuildOptions
 }
+
 type LayeredCacheImpl struct {
 	// 一级缓存
-	source DataSource
+	source source.DataSource
 	// 二级缓存
-	local LocalCache
+	local local.LocalCache
 
 	log *logrus.Logger
 
@@ -112,7 +152,7 @@ func (lc *LayeredCacheImpl) Del(ctx context.Context, key interface{}, args ...in
 	return err
 }
 
-func (lc *LayeredCacheImpl) Watch(ctx context.Context, onMessage OnMessage) <-chan error {
+func (lc *LayeredCacheImpl) Watch(ctx context.Context, onMessage source.OnMessage) <-chan error {
 	if lc.watchRunning {
 		lc.log.Warning("watch is running,if you want to watch again,please call UnWatch first")
 		return nil
@@ -139,11 +179,11 @@ func (lc *LayeredCacheImpl) Load(ctx context.Context, key interface{}, args ...i
 	return lc.local.Load(ctx, key.(string), args...)
 }
 
-func (lc *LayeredCacheImpl) Scan(ctx context.Context, pattern string, onScan OnScan) <-chan error {
+func (lc *LayeredCacheImpl) Scan(ctx context.Context, pattern string, onScan source.OnScan) <-chan error {
 	return lc.source.Scan(ctx, pattern, onScan)
 }
 
-func NewLayeredCacheImpl(source DataSource, local LocalCache, log *logrus.Logger, strategy CacheReadStrategy) *LayeredCacheImpl {
+func NewLayeredCacheImpl(source source.DataSource, local local.LocalCache, log *logrus.Logger, strategy CacheReadStrategy) *LayeredCacheImpl {
 	return &LayeredCacheImpl{
 		source:   source,
 		local:    local,

@@ -1,21 +1,28 @@
-package gobloom
+package golayeredcache
 
 import (
 	"context"
 	"fmt"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
+	"github.com/begonia-org/go-layered-cache/source"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
-type LayeredBloomFilter struct {
-	*golayeredcache.LayeredCacheImpl
+type LayeredCuckooFilterImpl struct {
+	*LayeredCacheImpl
 	log       *logrus.Logger
 	keyPrefix string
 }
 
-func (lb *LayeredBloomFilter) OnMessage(ctx context.Context, from string, message interface{}) error {
+func NewLayeredCuckooFilterImpl(layered *LayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredCuckooFilter {
+	return &LayeredCuckooFilterImpl{
+		LayeredCacheImpl: layered,
+		keyPrefix:        keyPrefix,
+		log:              log,
+	}
+}
+func (lb *LayeredCuckooFilterImpl) OnMessage(ctx context.Context, from string, message interface{}) error {
 	XMessage, ok := message.(redis.XMessage)
 	if !ok {
 		return fmt.Errorf("type except redis.XMessage,but got %T", message)
@@ -33,11 +40,15 @@ func (lb *LayeredBloomFilter) OnMessage(ctx context.Context, from string, messag
 		return fmt.Errorf("value is not string, got %T", values["value"])
 
 	}
+	// lb.log.Infof("onMessage:%v", values)
+	if op, ok := values["op"].(string); ok && op == "delete" {
+		return lb.DelOnLocal(ctx, key, []byte(value))
+	}
 	return lb.SetToLocal(ctx, key, []byte(value))
 }
 
 // onScan is a callback function for scan BF.SCANDUMP key iterator
-func (lb *LayeredBloomFilter) onScan(ctx context.Context, key interface{}) error {
+func (lb *LayeredCuckooFilterImpl) onScan(ctx context.Context, key interface{}) error {
 
 	keyStr, ok := key.(string)
 	if !ok {
@@ -51,7 +62,7 @@ func (lb *LayeredBloomFilter) onScan(ctx context.Context, key interface{}) error
 			lb.log.Errorf("dump:%v", err)
 			continue
 		}
-		if val, ok := v.(golayeredcache.RedisDump); ok {
+		if val, ok := v.(source.RedisDump); ok {
 			// lb.SetToLocal(ctx,keyStr,val)
 			lb.log.Infof("load %s", keyStr)
 			if err := lb.Load(ctx, keyStr, val); err != nil {
@@ -63,7 +74,7 @@ func (lb *LayeredBloomFilter) onScan(ctx context.Context, key interface{}) error
 
 	return nil
 }
-func (lb *LayeredBloomFilter) DumpSourceToLocal(ctx context.Context) error {
+func (lb *LayeredCuckooFilterImpl) DumpSourceToLocal(ctx context.Context) error {
 	ch := lb.Scan(ctx, lb.keyPrefix, lb.onScan)
 	for err := range ch {
 		if err != nil {
@@ -73,31 +84,27 @@ func (lb *LayeredBloomFilter) DumpSourceToLocal(ctx context.Context) error {
 	}
 	return nil
 }
-func (lc *LayeredBloomFilter) Watch(ctx context.Context) <-chan error {
+func (lc *LayeredCuckooFilterImpl) Watch(ctx context.Context) <-chan error {
 	return lc.LayeredCacheImpl.Watch(ctx, lc.OnMessage)
 }
-func (lc *LayeredBloomFilter) UnWatch() error {
+func (lc *LayeredCuckooFilterImpl) UnWatch() error {
 	return lc.LayeredCacheImpl.UnWatch()
 }
-func NewLayeredBloomFilter(layered *golayeredcache.LayeredCacheImpl, keyPrefix string, log *logrus.Logger) *LayeredBloomFilter {
-	return &LayeredBloomFilter{
-		LayeredCacheImpl: layered,
-		keyPrefix:        keyPrefix,
-		log:              log,
-	}
-}
 
-func (lc *LayeredBloomFilter) Check(ctx context.Context, key string, value []byte) bool {
+func (lc *LayeredCuckooFilterImpl) Check(ctx context.Context, key string, value []byte) (bool, error) {
 	vals, err := lc.LayeredCacheImpl.Get(ctx, key, value)
 	if err != nil {
 		lc.log.Errorf("check value of %s error:%v", key, err)
-		return false
+		return false, err
 	}
 	if len(vals) == 0 {
-		return false
+		return false, nil
 	}
-	return vals[0].(bool)
+	return vals[0].(bool), nil
 }
-func (lc *LayeredBloomFilter) Add(ctx context.Context, key string, value []byte) error {
+func (lc *LayeredCuckooFilterImpl) Add(ctx context.Context, key string, value []byte) error {
 	return lc.LayeredCacheImpl.Set(ctx, key, value)
+}
+func (lc *LayeredCuckooFilterImpl) Del(ctx context.Context, key string, value []byte) error {
+	return lc.LayeredCacheImpl.Del(ctx, key, value)
 }

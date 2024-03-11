@@ -1,4 +1,4 @@
-package gobloom
+package local
 
 import (
 	"bytes"
@@ -7,13 +7,44 @@ import (
 	"fmt"
 	"sync"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
+	"github.com/begonia-org/go-layered-cache/gobloom"
+	"github.com/begonia-org/go-layered-cache/source"
 )
 
 type LocalBloomFilters struct {
-	filters map[string]*GoBloomChain
-	mux     sync.RWMutex
-	bloomBuildOptions *BloomBuildOptions
+	filters           map[string]*gobloom.GoBloomChain
+	mux               sync.RWMutex
+	bloomBuildOptions *gobloom.BloomBuildOptions
+}
+
+// 对应于C中的dumpedChainHeader结构体，注意links字段在Go中的处理
+type dumpedChainHeader struct {
+	Size     uint64
+	Nfilters uint32
+	Options  uint32
+	Growth   uint32
+	// Links    []dumpedChainLink // 在Go中，这样的动态数组需要特别处理
+}
+
+//	typedef struct __attribute__((packed)) {
+//	    uint64_t bytes;
+//	    uint64_t bits;
+//	    uint64_t size;
+//	    double error;
+//	    double bpe;
+//	    uint32_t hashes;
+//	    uint64_t entries;
+//	    uint8_t n2;
+//	} dumpedChainLink;
+type dumpedChainLink struct {
+	Bytes   uint64
+	Bits    uint64
+	Size    uint64
+	Error   float64
+	Bpe     float64
+	Hashes  uint32
+	Entries uint64
+	N2      uint8
 }
 
 func (lbf *LocalBloomFilters) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error) {
@@ -39,7 +70,7 @@ func (lbf *LocalBloomFilters) Set(ctx context.Context, key interface{}, args ...
 	defer lbf.mux.Unlock()
 	f, ok := lbf.filters[key.(string)]
 	if !ok {
-		f=NewGoBloomChain(lbf.bloomBuildOptions.Entries,lbf.bloomBuildOptions.Errors,lbf.bloomBuildOptions.BloomOptions,lbf.bloomBuildOptions.Growth)
+		f = gobloom.NewGoBloomChain(lbf.bloomBuildOptions.Entries, lbf.bloomBuildOptions.Errors, lbf.bloomBuildOptions.BloomOptions, lbf.bloomBuildOptions.Growth)
 		if f == nil {
 			return fmt.Errorf("create bloom filter failed")
 		}
@@ -50,13 +81,11 @@ func (lbf *LocalBloomFilters) Set(ctx context.Context, key interface{}, args ...
 	}
 	return nil
 }
-func (lbf *LocalBloomFilters) AddFilter(key string, filter *GoBloomChain) {
+func (lbf *LocalBloomFilters) AddFilter(key string, filter *gobloom.GoBloomChain) {
 	lbf.mux.Lock()
 	defer lbf.mux.Unlock()
 	lbf.filters[key] = filter
 }
-
-
 
 func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
 
@@ -89,16 +118,15 @@ func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
 	}
 	firstLink := links[0]
 	// log.Printf("firstLink.Entries:%v,firstLink.Error:%f,header.Options:%d\n", firstLink.Entries, firstLink.Error, header.Options)
-	bc := NewGoBloomChain(firstLink.Entries, firstLink.Error*2, GoBloomOptions(header.Options), uint8(header.Growth))
+	bc := gobloom.NewGoBloomChain(firstLink.Entries, firstLink.Error*2, gobloom.GoBloomOptions(header.Options), uint8(header.Growth))
 	for _, link := range links[1:] {
-		bc.addLink(link.Entries, link.Error*2)
+		bc.AddLink(link.Entries, link.Error*2)
 	}
 	lbf.AddFilter(key, bc)
 	return nil
 }
 
-
-func (lbf *LocalBloomFilters) pos(key string, iter int64) (GoBloomFilter, uint64) {
+func (lbf *LocalBloomFilters) pos(key string, iter int64) (gobloom.GoBloomFilter, uint64) {
 	lbf.mux.RLock()
 	defer lbf.mux.RUnlock()
 	f, ok := lbf.filters[key]
@@ -110,12 +138,12 @@ func (lbf *LocalBloomFilters) pos(key string, iter int64) (GoBloomFilter, uint64
 	}
 	curIter := int(iter - 1)
 	seekPos := 0
-	var link GoBloomFilter
-	for i := 0; i < int(f.nfilters); i++ {
-		if seekPos+int(f.filters[i].GetBytesNumber()) > curIter {
-			link = f.filters[i]
+	var link gobloom.GoBloomFilter
+	for i := 0; i < int(f.GetNumberFilters()); i++ {
+		if seekPos+int(f.GetFilter(i).GetBytesNumber()) > curIter {
+			link = f.GetFilter(i)
 		} else {
-			seekPos += int(f.filters[i].GetBytesNumber())
+			seekPos += int(f.GetFilter(i).GetBytesNumber())
 		}
 	}
 	if link == nil {
@@ -125,7 +153,6 @@ func (lbf *LocalBloomFilters) pos(key string, iter int64) (GoBloomFilter, uint64
 	curIter -= seekPos
 	return link, uint64(curIter)
 }
-
 
 func (lbf *LocalBloomFilters) loadDump(key string, iter uint64, data []byte) error {
 
@@ -147,9 +174,9 @@ func (lbf *LocalBloomFilters) Load(ctx context.Context, key interface{}, args ..
 		return fmt.Errorf("args is empty")
 	}
 	keyStr := key.(string)
-	val, ok := args[0].(golayeredcache.RedisDump)
+	val, ok := args[0].(source.RedisDump)
 	if !ok {
-		return fmt.Errorf("args[0] is not golayeredcache.RedisDump")
+		return fmt.Errorf("args[0] is not RedisDump")
 	}
 	if val.Data == nil || len(val.Data) == 0 {
 		return nil
@@ -161,9 +188,9 @@ func (lbf *LocalBloomFilters) Load(ctx context.Context, key interface{}, args ..
 
 }
 
-func NewLocalBloomFilters(filters map[string]*GoBloomChain,buildOptions *BloomBuildOptions) *LocalBloomFilters {
+func NewLocalBloomFilters(filters map[string]*gobloom.GoBloomChain, buildOptions *gobloom.BloomBuildOptions) *LocalBloomFilters {
 	return &LocalBloomFilters{
-		filters: filters,
-		bloomBuildOptions:buildOptions,
+		filters:           filters,
+		bloomBuildOptions: buildOptions,
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
+	"github.com/begonia-org/go-layered-cache/utils"
 )
 
 // // accurately.
@@ -73,41 +73,13 @@ type GoBloomFilterImpl struct {
 	mux sync.RWMutex
 }
 
-//	typedef struct __attribute__((packed)) {
-//	    uint64_t bytes;
-//	    uint64_t bits;
-//	    uint64_t size;
-//	    double error;
-//	    double bpe;
-//	    uint32_t hashes;
-//	    uint64_t entries;
-//	    uint8_t n2;
-//	} dumpedChainLink;
-type dumpedChainLink struct {
-	Bytes   uint64
-	Bits    uint64
-	Size    uint64
-	Error   float64
-	Bpe     float64
-	Hashes  uint32
-	Entries uint64
-	N2      uint8
-}
-
-// 对应于C中的dumpedChainHeader结构体，注意links字段在Go中的处理
-type dumpedChainHeader struct {
-	Size     uint64
-	Nfilters uint32
-	Options  uint32
-	Growth   uint32
-	// Links    []dumpedChainLink // 在Go中，这样的动态数组需要特别处理
-}
 type BloomBuildOptions struct {
 	Entries      uint64
 	Errors       float64
 	BloomOptions GoBloomOptions
 	Growth       uint8
 }
+
 // DefaultBuildBloomOptions is the default options for building a new bloom filter.
 // The options values same as the redisbloom C version.
 var DefaultBuildBloomOptions = &BloomBuildOptions{
@@ -116,10 +88,11 @@ var DefaultBuildBloomOptions = &BloomBuildOptions{
 	BloomOptions: BLOOM_OPT_NOROUND | BLOOM_OPT_FORCE64 | BLOOM_OPT_NO_SCALING,
 	Growth:       2,
 }
+
 func NewGoBloom(buildOptions *BloomBuildOptions) *GoBloomFilterImpl {
-	entries:=buildOptions.Entries
-	errorRate:=buildOptions.Errors
-	options:=buildOptions.BloomOptions
+	entries := buildOptions.Entries
+	errorRate := buildOptions.Errors
+	options := buildOptions.BloomOptions
 	if entries < 1 || errorRate <= 0 || errorRate >= 1.0 {
 		return nil
 	}
@@ -194,8 +167,8 @@ func NewGoBloom(buildOptions *BloomBuildOptions) *GoBloomFilterImpl {
 }
 
 func (g *GoBloomFilterImpl) Hash64(data []byte) baseHash {
-	a := golayeredcache.MurmurHash64A(data, 0xc6a4a7935bd1e995)
-	b := golayeredcache.MurmurHash64A(data, a)
+	a := utils.MurmurHash64A(data, 0xc6a4a7935bd1e995)
+	b := utils.MurmurHash64A(data, a)
 	return baseHash{a, b}
 }
 

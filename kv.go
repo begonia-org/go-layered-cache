@@ -1,21 +1,20 @@
-package cache
+package golayeredcache
 
 import (
 	"context"
 	"fmt"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
-type LayeredCacheFilter struct {
-	*golayeredcache.LayeredCacheImpl
+type LayeredKeyValueCacheImpl struct {
+	*LayeredCacheImpl
 	log       *logrus.Logger
 	keyPrefix string
 }
 
-func (lb *LayeredCacheFilter) OnMessage(ctx context.Context, from string, message interface{}) error {
+func (lb *LayeredKeyValueCacheImpl) OnMessage(ctx context.Context, from string, message interface{}) error {
 	XMessage, ok := message.(redis.XMessage)
 	if !ok {
 		return fmt.Errorf("type except redis.XMessage,but got %T", message)
@@ -33,7 +32,7 @@ func (lb *LayeredCacheFilter) OnMessage(ctx context.Context, from string, messag
 	if op, ok := values["op"].(string); ok && op == "delete" {
 		return lb.DelOnLocal(ctx, key)
 	}
-	value:=values["value"].(string)
+	value := values["value"].(string)
 	if !ok {
 		return fmt.Errorf("value is not string, got %T", values["value"])
 	}
@@ -41,8 +40,7 @@ func (lb *LayeredCacheFilter) OnMessage(ctx context.Context, from string, messag
 	return lb.SetToLocal(ctx, key, []byte(value))
 }
 
-// onScan is a callback function for scan BF.SCANDUMP key iterator
-func (lb *LayeredCacheFilter) onScan(ctx context.Context, key interface{}) error {
+func (lb *LayeredKeyValueCacheImpl) onScan(ctx context.Context, key interface{}) error {
 
 	keyStr, ok := key.(string)
 	if !ok {
@@ -64,7 +62,7 @@ func (lb *LayeredCacheFilter) onScan(ctx context.Context, key interface{}) error
 
 	return nil
 }
-func (lb *LayeredCacheFilter) DumpSourceToLocal(ctx context.Context) error {
+func (lb *LayeredKeyValueCacheImpl) DumpSourceToLocal(ctx context.Context) error {
 	ch := lb.Scan(ctx, lb.keyPrefix, lb.onScan)
 	for err := range ch {
 		if err != nil {
@@ -74,19 +72,34 @@ func (lb *LayeredCacheFilter) DumpSourceToLocal(ctx context.Context) error {
 	}
 	return nil
 }
-func (lc *LayeredCacheFilter) Watch(ctx context.Context) <-chan error {
+func (lc *LayeredKeyValueCacheImpl) Watch(ctx context.Context) <-chan error {
 	return lc.LayeredCacheImpl.Watch(ctx, lc.OnMessage)
 }
-func (lc *LayeredCacheFilter) UnWatch() error {
+func (lc *LayeredKeyValueCacheImpl) UnWatch() error {
 	return lc.LayeredCacheImpl.UnWatch()
 }
 
-func NewLayeredCacheFilter(layered *golayeredcache.LayeredCacheImpl, keyPrefix string, log *logrus.Logger) *LayeredCacheFilter {
-	return &LayeredCacheFilter{
+func NewLayeredKeyValueCacheImpl(layered *LayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredKeyValueCache {
+	return &LayeredKeyValueCacheImpl{
 		LayeredCacheImpl: layered,
 		keyPrefix:        keyPrefix,
 		log:              log,
 	}
 }
 
-// func (lc *LayeredCacheFilter)Del()
+func (lc *LayeredKeyValueCacheImpl) Get(ctx context.Context, key string) ([]byte, error) {
+	values, err := lc.LayeredCacheImpl.Get(ctx, key)
+	if err != nil || len(values) == 0 {
+		return nil, err
+	}
+	return values[0].([]byte), nil
+}
+func (lc *LayeredKeyValueCacheImpl) Set(ctx context.Context, key string, value []byte) error {
+	return lc.LayeredCacheImpl.Set(ctx, key, value)
+}
+
+func (lc *LayeredKeyValueCacheImpl) Del(ctx context.Context, key string) error {
+	return lc.LayeredCacheImpl.Del(ctx, key)
+}
+
+// func (lc *LayeredKeyValueCacheImpl)Del()

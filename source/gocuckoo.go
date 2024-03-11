@@ -1,23 +1,19 @@
-package gocuckoo
+package source
 
 import (
 	"context"
 	"fmt"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
 	"github.com/sirupsen/logrus"
 )
 
 type CuckooSourceImpl struct {
-	*golayeredcache.DataSourceFromRedis
+	*DataSourceFromRedis
 	channel string
 	cancel  context.CancelFunc
 	log     *logrus.Logger
 }
-type LocalBloomFilter interface {
-	Test(data []byte) bool
-	Add(data []byte) bool
-}
+
 
 func (bs *CuckooSourceImpl) Get(ctx context.Context, key string, values ...interface{}) ([]interface{}, error) {
 	args := make([]interface{}, len(values))
@@ -55,7 +51,7 @@ func (bs *CuckooSourceImpl) Set(ctx context.Context, key string, values ...inter
 			"value": data,
 		}
 	}
-	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "CF.ADD",
 		CmdArgs:      args,
@@ -82,7 +78,7 @@ func (bs *CuckooSourceImpl) Del(ctx context.Context, key interface{}, args ...in
 			"op":    "delete",
 		}
 	}
-	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "CF.DEL",
 		CmdArgs:      args2,
@@ -110,7 +106,7 @@ func (bs *CuckooSourceImpl) Dump(ctx context.Context, key interface{}, args ...i
 				if data == nil || next == 0 {
 					return
 				}
-				ch <- golayeredcache.RedisDump{Data: data, Iter: uint64(iter)}
+				ch <- RedisDump{Data: data, Iter: uint64(iter)}
 			}
 		}
 	}()
@@ -121,7 +117,7 @@ func (bs *CuckooSourceImpl) UnWatch(ctx context.Context) error {
 	return bs.DataSourceFromRedis.UnWatch(ctx, bs.cancel)
 }
 
-func NewCuckooSourceImpl(source *golayeredcache.DataSourceFromRedis, channel string, log *logrus.Logger) *CuckooSourceImpl {
+func NewCuckooSourceImpl(source *DataSourceFromRedis, channel string, log *logrus.Logger) *CuckooSourceImpl {
 	return &CuckooSourceImpl{
 		DataSourceFromRedis: source,
 		channel:             channel,

@@ -1,23 +1,19 @@
-package gobloom
+package source
 
 import (
 	"context"
 	"fmt"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
 	"github.com/sirupsen/logrus"
 )
 
 type BloomSourceImpl struct {
-	*golayeredcache.DataSourceFromRedis
+	*DataSourceFromRedis
 	channel string
 	cancel  context.CancelFunc
 	log     *logrus.Logger
 }
-type LocalBloomFilter interface {
-	Test(data []byte) bool
-	Add(data []byte) bool
-}
+
 
 func (bs *BloomSourceImpl) Get(ctx context.Context, key string, values ...interface{}) ([]interface{}, error) {
 	args := make([]interface{}, len(values))
@@ -55,7 +51,7 @@ func (bs *BloomSourceImpl) Set(ctx context.Context, key string, values ...interf
 			"value": data,
 		}
 	}
-	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &golayeredcache.TxHandleKeysOptions{
+	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "BF.ADD",
 		CmdArgs:      args,
@@ -83,7 +79,7 @@ func (bs *BloomSourceImpl) Dump(ctx context.Context, key interface{}, args ...in
 				if data == nil || next == 0 {
 					return
 				}
-				ch <- golayeredcache.RedisDump{Data: data, Iter: uint64(iter)}
+				ch <- RedisDump{Data: data, Iter: uint64(iter)}
 			}
 		}
 	}()
@@ -94,7 +90,7 @@ func (bs *BloomSourceImpl) UnWatch(ctx context.Context) error {
 	return bs.DataSourceFromRedis.UnWatch(ctx, bs.cancel)
 }
 
-func NewBloomSourceImpl(source *golayeredcache.DataSourceFromRedis, channel string, log *logrus.Logger) *BloomSourceImpl {
+func NewBloomSourceImpl(source *DataSourceFromRedis, channel string, log *logrus.Logger) *BloomSourceImpl {
 	return &BloomSourceImpl{
 		DataSourceFromRedis: source,
 		channel:             channel,

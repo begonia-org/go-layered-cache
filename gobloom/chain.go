@@ -2,6 +2,7 @@ package gobloom
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 /** A chain of one or more bloom filters */
@@ -32,7 +33,7 @@ func NewGoBloomChain(initsize uint64, errorRate float64, options GoBloomOptions,
 		return nil
 	}
 	sb := &GoBloomChain{
-		mux:	  sync.RWMutex{},
+		mux: sync.RWMutex{},
 	}
 	sb.growth = growth
 	sb.options = options
@@ -41,11 +42,11 @@ func NewGoBloomChain(initsize uint64, errorRate float64, options GoBloomOptions,
 	if options&BLOOM_OPT_NO_SCALING != 0 {
 		tightening = 1
 	}
-	sb.addLink(initsize, errorRate*tightening)
+	sb.AddLink(initsize, errorRate*tightening)
 	return sb
 }
 
-func (bc *GoBloomChain) addLink(size uint64, errorRate float64) {
+func (bc *GoBloomChain) AddLink(size uint64, errorRate float64) {
 	buildOption := &BloomBuildOptions{
 		Entries: size,
 
@@ -80,7 +81,7 @@ func (bc *GoBloomChain) Add(data []byte) bool {
 			return false
 		}
 		errors := cur.GetErrorRate() * 0.5
-		bc.addLink(cur.GetEntries()*uint64(bc.growth), errors)
+		bc.AddLink(cur.GetEntries()*uint64(bc.growth), errors)
 		cur = bc.filters[bc.nfilters-1]
 	}
 	rv := cur.Add(data)
@@ -149,4 +150,12 @@ func (bc *GoBloomChain) Add(data []byte) bool {
 
 func (bc *GoBloomChain) GetItems() uint64 {
 	return bc.capacity
+}
+
+func (bc *GoBloomChain) GetNumberFilters() uint64 {
+	return atomic.LoadUint64(&bc.nfilters)
+}
+
+func (bc *GoBloomChain) GetFilter(index int) GoBloomFilter {
+	return bc.filters[index]
 }

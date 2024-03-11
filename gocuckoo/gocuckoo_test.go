@@ -4,14 +4,14 @@ import (
 	"testing"
 	"unsafe"
 
-	golayeredcache "github.com/begonia-org/go-layered-cache"
+	"github.com/begonia-org/go-layered-cache/utils"
 	c "github.com/smartystreets/goconvey/convey"
 )
 
 func TestCuckoo(t *testing.T) {
 	c.Convey("TestCuckoo", t, func() {
-		cf := NewGoCuckooFilter(DefaultBuildBloomOptions)
-		hash := golayeredcache.MurmurHash64A([]byte("item1"), 0)
+		cf := NewGoCuckooFilter(DefaultBuildCuckooOptions)
+		hash := utils.MurmurHash64A([]byte("item1"), 0)
 		c.So(hash, c.ShouldEqual, 8732656736511103026)
 		c.So(hash%255+1, c.ShouldEqual, 7)
 		err := cf.Insert([]byte("item1"))
