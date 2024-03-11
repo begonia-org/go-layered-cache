@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/begonia-org/go-layered-cache/local"
 	"github.com/begonia-org/go-layered-cache/source"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -100,4 +101,8 @@ func (lc *LayeredBloomFilter) Check(ctx context.Context, key string, value []byt
 }
 func (lc *LayeredBloomFilter) Add(ctx context.Context, key string, value []byte) error {
 	return lc.LayeredCacheImpl.Set(ctx, key, value)
+}
+
+func (lc *LayeredBloomFilter) AddLocalFilter(key string, filter local.Filter) error {
+	return lc.LayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
 }

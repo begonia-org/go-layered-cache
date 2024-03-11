@@ -57,8 +57,8 @@ func (bc *GoBloomChain) AddLink(size uint64, errorRate float64) {
 	bc.filters = append(bc.filters, NewGoBloom(buildOption))
 	bc.nfilters++
 }
-
-func (bc *GoBloomChain) Test(data []byte) bool {
+// Check 检查数据是否在布隆过滤器链中
+func (bc *GoBloomChain) Check(data []byte) bool {
 	bc.mux.RLock()
 	defer bc.mux.RUnlock()
 	for i := int64(bc.nfilters - 1); i >= 0; i-- {
@@ -69,7 +69,7 @@ func (bc *GoBloomChain) Test(data []byte) bool {
 	return false
 }
 func (bc *GoBloomChain) Add(data []byte) bool {
-	if bc.Test(data) {
+	if bc.Check(data) {
 		return false
 	}
 	bc.mux.Lock()
@@ -91,62 +91,6 @@ func (bc *GoBloomChain) Add(data []byte) bool {
 	return rv
 }
 
-// func (bc *GoBloomChain) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error){
-
-// }
-// func (bc *GoBloomChain) Set(ctx context.Context, key interface{}, args ...interface{}) error
-// func (bc *GoBloomChain) OnMessage(ctx context.Context, from interface{}, message redis.XMessage) error
-
-/**
- * BF.LOADCHUNK <KEY> <ITER> <DATA>
- * Incrementally loads a bloom filter.
- */
-//  static int BFLoadChunk_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-//     RedisModule_AutoMemory(ctx);
-
-//     if (argc != 4) {
-//         return RedisModule_WrongArity(ctx);
-//     }
-
-//     long long iter;
-//     if (RedisModule_StringToLongLong(argv[2], &iter) != REDISMODULE_OK) {
-//         return RedisModule_ReplyWithError(ctx, "ERR Second argument must be numeric");
-//     }
-
-//     size_t bufLen;
-//     const char *buf = RedisModule_StringPtrLen(argv[3], &bufLen);
-
-//     RedisModuleKey *key = RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
-//     SBChain *sb;
-//     int status = bfGetChain(key, &sb);
-//     if (status == SB_EMPTY && iter == 1) {
-//         const char *errmsg;
-//         SBChain *sb = SB_NewChainFromHeader(buf, bufLen, &errmsg);
-//         if (!sb) {
-//             return RedisModule_ReplyWithError(ctx, errmsg);
-//         } else {
-//             RedisModule_ModuleTypeSetValue(key, BFType, sb);
-//             RedisModule_ReplicateVerbatim(ctx);
-//             return RedisModule_ReplyWithSimpleString(ctx, "OK");
-//         }
-//     } else if (status != SB_OK) {
-//         return RedisModule_ReplyWithError(ctx, statusStrerror(status));
-//     }
-
-//     assert(sb);
-
-//     const char *errMsg;
-//     if (SBChain_LoadEncodedChunk(sb, iter, buf, bufLen, &errMsg) != 0) {
-//         return RedisModule_ReplyWithError(ctx, errMsg);
-//     } else {
-//         RedisModule_ReplicateVerbatim(ctx); // Should be replicated?
-//         return RedisModule_ReplyWithSimpleString(ctx, "OK");
-//     }
-// }
-
-// func (bc *GoBloomChain) LoadFromRedisDump(iter int, dump []byte) error {
-// 	return bc.filters[0].LoadFromRedisDump(dump)
-// }
 
 func (bc *GoBloomChain) GetItems() uint64 {
 	return bc.capacity

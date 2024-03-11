@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/begonia-org/go-layered-cache/local"
 	"github.com/begonia-org/go-layered-cache/source"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -107,4 +108,8 @@ func (lc *LayeredCuckooFilterImpl) Add(ctx context.Context, key string, value []
 }
 func (lc *LayeredCuckooFilterImpl) Del(ctx context.Context, key string, value []byte) error {
 	return lc.LayeredCacheImpl.Del(ctx, key, value)
+}
+
+func (lc *LayeredCuckooFilterImpl) AddLocalFilter( key string, filter local.Filter) error{
+	return lc.LayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
 }

@@ -26,16 +26,7 @@ type dumpedChainHeader struct {
 	// Links    []dumpedChainLink // 在Go中，这样的动态数组需要特别处理
 }
 
-//	typedef struct __attribute__((packed)) {
-//	    uint64_t bytes;
-//	    uint64_t bits;
-//	    uint64_t size;
-//	    double error;
-//	    double bpe;
-//	    uint32_t hashes;
-//	    uint64_t entries;
-//	    uint8_t n2;
-//	} dumpedChainLink;
+
 type dumpedChainLink struct {
 	Bytes   uint64
 	Bits    uint64
@@ -61,7 +52,7 @@ func (lbf *LocalBloomFilters) Get(ctx context.Context, key interface{}, args ...
 		if !ok {
 			return nil, fmt.Errorf("arg is not []byte")
 		}
-		result[i] = f.Test(val)
+		result[i] = f.Check(val)
 	}
 	return result, nil
 }
@@ -81,10 +72,11 @@ func (lbf *LocalBloomFilters) Set(ctx context.Context, key interface{}, args ...
 	}
 	return nil
 }
-func (lbf *LocalBloomFilters) AddFilter(key string, filter *gobloom.GoBloomChain) {
+func (lbf *LocalBloomFilters) AddFilter(key string, filter Filter) bool {
 	lbf.mux.Lock()
 	defer lbf.mux.Unlock()
-	lbf.filters[key] = filter
+	lbf.filters[key] = filter.(*gobloom.GoBloomChain)
+	return false
 }
 
 func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
@@ -117,7 +109,6 @@ func (lbf *LocalBloomFilters) loadHeader(key string, data []byte) error {
 		}
 	}
 	firstLink := links[0]
-	// log.Printf("firstLink.Entries:%v,firstLink.Error:%f,header.Options:%d\n", firstLink.Entries, firstLink.Error, header.Options)
 	bc := gobloom.NewGoBloomChain(firstLink.Entries, firstLink.Error*2, gobloom.GoBloomOptions(header.Options), uint8(header.Growth))
 	for _, link := range links[1:] {
 		bc.AddLink(link.Entries, link.Error*2)

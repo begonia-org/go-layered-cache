@@ -356,3 +356,7 @@ func (cf *GoCuckooFilterImpl) GetFilter(index int) *SubCF {
 func (cf *GoCuckooFilterImpl) GetNumItems() uint64 {
 	return cf.numItems
 }
+
+func (cf *GoCuckooFilterImpl) Add(value []byte) bool {
+	return cf.Insert(value) == nil
+}

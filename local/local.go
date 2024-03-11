@@ -9,12 +9,17 @@ type LocalCache interface {
 	// Del(ctx context.Context, key interface{}, args ...interface{}) error
 	// OnMessage(ctx context.Context, from interface{}, message interface{}) error
 }
-type LocalFilter interface {
+type Filter interface {
+	// LocalCache
+	Check(value []byte) (bool)
+	Add(value []byte) bool
+}
+type LocalFilters interface {
 	LocalCache
-	Check(ctx context.Context, key string, value []byte) (bool, error)
-	Add(ctx context.Context, key string, value []byte) error
+	Filter
+	AddFilter(key string, filter Filter) error
 }
 type LocalCuckooFilter interface {
-	LocalFilter
+	LocalFilters
 	Del(ctx context.Context, key string, value []byte) error
 }

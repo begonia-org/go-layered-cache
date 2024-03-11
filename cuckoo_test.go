@@ -110,14 +110,13 @@ func TestCuckooWatch(t *testing.T) {
 			RDB:       rdb,
 			Watcher:   &watcher,
 			KeyPrefix: "cf:cache",
-			// Entries:   1000,
-			// Errors:    0.01,
 			Channel:  "cf:test",
 			Strategy: LocalOnly,
 			Log:      logrus.New(),
 		}
 		defaultBuildOptions := gocuckoo.DefaultBuildCuckooOptions
 		layered1 := NewLayeredCuckoo(options, defaultBuildOptions)
+		
 		ctx := context.Background()
 
 		err := layered1.Add(ctx, "cf:cache:test", []byte("item4"))

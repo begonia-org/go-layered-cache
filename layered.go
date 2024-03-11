@@ -54,6 +54,7 @@ type LayeredFilter interface {
 	Loader
 	Check(ctx context.Context, key string, value []byte) (bool, error)
 	Add(ctx context.Context, key string, value []byte) error
+	AddLocalFilter(key string,filter local.Filter)error
 }
 type LayeredCuckooFilter interface {
 	LayeredFilter
