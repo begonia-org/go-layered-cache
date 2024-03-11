@@ -11,6 +11,13 @@ import (
 	"github.com/begonia-org/go-layered-cache/source"
 )
 
+// NewKeyValueCache creates a new LayeredKeyValueCache. It is only for key-value cache.
+// The cache is a layered cache, which means it has a local cache and a source cache.
+// The local cache is a bigcache, and the source cache is a redis cache.
+// Parameters:
+//   ctx: context.Context
+//   options: LayeredBuildOptions is a struct that contains the options for building the cache.
+//   cacheConfig: bigcache.Config is the configuration for the bigcache.
 func NewKeyValueCache(ctx context.Context, options LayeredBuildOptions, cacheConfig bigcache.Config) (LayeredKeyValueCache, error) {
 	big, err := bigcache.New(ctx, cacheConfig)
 	if err != nil {

@@ -78,9 +78,9 @@ func TestBloomLayeredLoad(t *testing.T) {
 			Watcher:   &watcher,
 			KeyPrefix: "bf:cache",
 
-			Channel:   "bf:test",
-			Strategy:  LocalOnly,
-			Log:       logrus.New(),
+			Channel:  "bf:test",
+			Strategy: LocalOnly,
+			Log:      logrus.New(),
 		}
 		layered := NewLayeredBloom(options, &gobloom.BloomBuildOptions{
 			Entries:      1000,
@@ -88,7 +88,7 @@ func TestBloomLayeredLoad(t *testing.T) {
 			BloomOptions: gobloom.BLOOM_OPT_NOROUND | gobloom.BLOOM_OPT_FORCE64 | gobloom.BLOOM_OPT_NO_SCALING,
 			Growth:       2,
 		})
-		err := layered.DumpSourceToLocal(context.Background())
+		err := layered.LoadDump(context.Background())
 		c.So(err, c.ShouldBeNil)
 		time.Sleep(1 * time.Second)
 		values, err := layered.Check(context.Background(), "bf:cache:test", []byte("item1"))
@@ -119,10 +119,10 @@ func TestBloomWatch(t *testing.T) {
 			RDB:       rdb,
 			Watcher:   &watcher,
 			KeyPrefix: "bf:cache",
-	
-			Channel:   "bf:test",
-			Strategy:  LocalOnly,
-			Log:       logrus.New(),
+
+			Channel:  "bf:test",
+			Strategy: LocalOnly,
+			Log:      logrus.New(),
 		}
 		defaultBuildBloomOptions := &gobloom.BloomBuildOptions{
 			Entries:      1000,

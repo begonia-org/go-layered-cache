@@ -74,7 +74,7 @@ func (lb *LayeredCuckooFilterImpl) onScan(ctx context.Context, key interface{}) 
 
 	return nil
 }
-func (lb *LayeredCuckooFilterImpl) DumpSourceToLocal(ctx context.Context) error {
+func (lb *LayeredCuckooFilterImpl) LoadDump(ctx context.Context) error {
 	ch := lb.Scan(ctx, lb.keyPrefix, lb.onScan)
 	for err := range ch {
 		if err != nil {

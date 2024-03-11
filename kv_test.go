@@ -65,14 +65,14 @@ func TestLoad(t *testing.T) {
 			KeyPrefix: "test:cache:*",
 			// Entries:   1000,
 			// Errors:    0.01,
-			Channel:   "cache:test",
-			Strategy:  LocalOnly,
-			Log:       logrus.New(),
+			Channel:  "cache:test",
+			Strategy: LocalOnly,
+			Log:      logrus.New(),
 		}
 
 		defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
 		layered, _ := NewKeyValueCache(ctx, options, defaultBuildOptions)
-		err := layered.DumpSourceToLocal(ctx)
+		err := layered.LoadDump(ctx)
 		c.So(err, c.ShouldBeNil)
 		time.Sleep(1 * time.Second)
 

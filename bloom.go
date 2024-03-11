@@ -63,7 +63,7 @@ func (lb *LayeredBloomFilter) onScan(ctx context.Context, key interface{}) error
 
 	return nil
 }
-func (lb *LayeredBloomFilter) DumpSourceToLocal(ctx context.Context) error {
+func (lb *LayeredBloomFilter) LoadDump(ctx context.Context) error {
 	ch := lb.Scan(ctx, lb.keyPrefix, lb.onScan)
 	for err := range ch {
 		if err != nil {

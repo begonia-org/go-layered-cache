@@ -28,7 +28,7 @@ type Watcher interface {
 	UnWatch() error
 }
 type Loader interface {
-	DumpSourceToLocal(ctx context.Context) error
+	LoadDump(ctx context.Context) error
 }
 type LayeredCache interface {
 	Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
@@ -39,7 +39,7 @@ type LayeredCache interface {
 	Watch(ctx context.Context) <-chan error
 	UnWatch() error
 	OnMessage(ctx context.Context, from string, message interface{}) error
-	DumpSourceToLocal(ctx context.Context) error
+	LoadDump(ctx context.Context) error
 }
 type LayeredKeyValueCache interface {
 	// LayeredCache
@@ -59,7 +59,6 @@ type LayeredCuckooFilter interface {
 	LayeredFilter
 	Del(ctx context.Context, key string, value []byte) error
 }
-
 
 type LayeredBuildOptions struct {
 	RDB     *redis.Client
