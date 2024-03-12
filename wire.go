@@ -45,7 +45,7 @@ func NewKeyValueCache(ctx context.Context, options LayeredBuildOptions, cacheCon
 //
 // Returns:
 //   - LayeredCuckooFilter: the new LayeredCuckooFilter
-func NewLayeredCuckoo(options *LayeredBuildOptions, buildCuckooOptions *gocuckoo.CuckooBuildOptions, extOptions ...LayeredFilterOptions) LayeredCuckooFilter {
+func NewLayeredCuckoo(options *LayeredBuildOptions, buildCuckooOptions gocuckoo.CuckooBuildOptions, extOptions ...LayeredFilterOptions) LayeredCuckooFilter {
 
 	redSource := source.NewDataSourceFromRedis(options.RDB, options.Watcher)
 
@@ -71,7 +71,7 @@ func NewLayeredCuckoo(options *LayeredBuildOptions, buildCuckooOptions *gocuckoo
 //
 // Returns:
 //   - LayeredBloomFilter: the new LayeredBloomFilter
-func NewLayeredBloom(options *LayeredBuildOptions, bloomOptions *gobloom.BloomBuildOptions, extOptions ...LayeredFilterOptions) LayeredFilter {
+func NewLayeredBloom(options *LayeredBuildOptions, bloomOptions gobloom.BloomBuildOptions, extOptions ...LayeredFilterOptions) LayeredFilter {
 
 	redSource := source.NewDataSourceFromRedis(options.RDB, options.Watcher)
 

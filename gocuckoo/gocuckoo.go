@@ -87,7 +87,7 @@ type CuckooBuildOptions struct {
 
 // DefaultBuildBloomOptions is the default options for building a new bloom filter.
 // The options values same as the redisbloom C version.
-var DefaultBuildCuckooOptions = &CuckooBuildOptions{
+var DefaultBuildCuckooOptions = CuckooBuildOptions{
 	MaxIterations: 20,
 	Expansion:     1,
 	BucketSize:    2,
@@ -117,7 +117,7 @@ var DefaultBuildCuckooOptions = &CuckooBuildOptions{
 // Note:
 // If the provided capacity or expansion is not a power of two, they will be adjusted to the nearest
 // larger power of two. This adjustment optimizes the internal structure of the filter for efficiency.
-func NewGoCuckooFilter(options *CuckooBuildOptions) *GoCuckooFilterImpl {
+func NewGoCuckooFilter(options CuckooBuildOptions) *GoCuckooFilterImpl {
 	filter := &GoCuckooFilterImpl{
 		expansion:     uint16(GetNextN2(uint64(options.Expansion))),
 		bucketSize:    options.BucketSize,

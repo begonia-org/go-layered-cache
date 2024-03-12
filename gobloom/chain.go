@@ -5,7 +5,9 @@ import (
 	"sync/atomic"
 )
 
-/** A chain of one or more bloom filters */
+// GoBloomChain is a chain of bloom filters
+// It  refers to the `SBChain` struct of  redisbloom module.
+// See: https://github.com/RedisBloom/RedisBloom/blob/master/src/sb.h
 type GoBloomChain struct {
 	filters  []GoBloomFilter
 	capacity uint64

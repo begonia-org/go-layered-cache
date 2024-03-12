@@ -16,7 +16,7 @@ type LocalCuckooFilters struct {
 	filters map[string]*gocuckoo.GoCuckooFilterImpl
 	mux     sync.RWMutex
 	// bloomBuildOptions *BloomBuildOptions
-	cuckooBuildOptions *gocuckoo.CuckooBuildOptions
+	cuckooBuildOptions gocuckoo.CuckooBuildOptions
 }
 
 func (lcf *LocalCuckooFilters) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error) {
@@ -161,7 +161,7 @@ func (lcf *LocalCuckooFilters) Del(ctx context.Context, key interface{}, args ..
 }
 
 // DelOnLocal(ctx context.Context,key interface{},args ...interface{})error
-func NewLocalCuckooFilters(filters map[string]*gocuckoo.GoCuckooFilterImpl, buildOptions *gocuckoo.CuckooBuildOptions) *LocalCuckooFilters {
+func NewLocalCuckooFilters(filters map[string]*gocuckoo.GoCuckooFilterImpl, buildOptions gocuckoo.CuckooBuildOptions) *LocalCuckooFilters {
 	return &LocalCuckooFilters{
 		filters:            filters,
 		cuckooBuildOptions: buildOptions,

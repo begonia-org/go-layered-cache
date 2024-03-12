@@ -82,7 +82,7 @@ func TestBloomLayeredLoad(t *testing.T) {
 			Strategy: LocalOnly,
 			Log:      logrus.New(),
 		}
-		layered := NewLayeredBloom(options, &gobloom.BloomBuildOptions{
+		layered := NewLayeredBloom(options, gobloom.BloomBuildOptions{
 			Entries:      1000,
 			Errors:       0.01,
 			BloomOptions: gobloom.BLOOM_OPT_NOROUND | gobloom.BLOOM_OPT_FORCE64 | gobloom.BLOOM_OPT_NO_SCALING,
@@ -124,7 +124,7 @@ func TestBloomWatch(t *testing.T) {
 			Strategy: LocalOnly,
 			Log:      logrus.New(),
 		}
-		defaultBuildBloomOptions := &gobloom.BloomBuildOptions{
+		defaultBuildBloomOptions := gobloom.BloomBuildOptions{
 			Entries:      1000,
 			Errors:       0.01,
 			BloomOptions: gobloom.BLOOM_OPT_NOROUND | gobloom.BLOOM_OPT_FORCE64 | gobloom.BLOOM_OPT_NO_SCALING,

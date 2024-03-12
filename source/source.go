@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"time"
-	"unsafe"
 
+	"github.com/begonia-org/go-layered-cache/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -49,17 +47,7 @@ type RedisDump struct {
 	Data []byte
 	Iter uint64
 }
-type WatchOptions struct {
-	// BatchSize is the maximum number of messages to read from the stream per call to XREAD.
-	BatchSize int64
-	// Block is the maximum amount of time to block for new messages.
-	Block time.Duration
-	//
 
-	// Channels is the list of streams to read from.
-	Channels []interface{}
-	WatcheAt string
-}
 type TxHandleKeysOptions struct {
 	Channel string
 	Cmd     string
@@ -68,20 +56,6 @@ type TxHandleKeysOptions struct {
 	SendMessages []interface{}
 }
 
-func RedisStringToBytes(s string) []byte {
-	stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&s))
-
-	var b []byte
-	byteHeader := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	byteHeader.Data = stringHeader.Data
-	byteHeader.Len = stringHeader.Len
-	byteHeader.Cap = stringHeader.Len
-
-	return b
-}
-func BytesToString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
 func (d *DataSourceFromRedis) Get(ctx context.Context, key string, args ...interface{}) (string, error) {
 	val, err := d.rdb.Get(ctx, key).Result()
 	if err != nil {
@@ -272,14 +246,14 @@ func (d *DataSourceFromRedis) BFScanDump(ctx context.Context, key string, iter i
 		return nil, 0, err
 	}
 
-	return RedisStringToBytes(dump.Data), dump.Iter, err
+	return utils.RedisStringToBytes(dump.Data), dump.Iter, err
 }
 func (d *DataSourceFromRedis) CFScanDump(ctx context.Context, key string, iter int64) ([]byte, int64, error) {
 	dump, err := d.rdb.CFScanDump(ctx, key, iter).Result()
 	if err != nil {
 		return nil, 0, err
 	}
-	return RedisStringToBytes(dump.Data), dump.Iter, err
+	return utils.RedisStringToBytes(dump.Data), dump.Iter, err
 }
 
 func NewDataSourceFromRedis(rdb *redis.Client, watcher *WatchOptions) *DataSourceFromRedis {

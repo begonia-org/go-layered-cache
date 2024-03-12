@@ -47,6 +47,9 @@ type baseHash struct {
 	a uint64
 	b uint64
 }
+// GoBloomFilterImpl is a bloom filter implementation which is refer to redisbloom module.
+//
+// You can see the redisbloom source code from https://github.com/RedisBloom/RedisBloom/blob/master/deps/bloom/bloom.h
 type GoBloomFilterImpl struct {
 	// 预估的元素个数
 	entries uint64
@@ -82,13 +85,16 @@ type BloomBuildOptions struct {
 
 // DefaultBuildBloomOptions is the default options for building a new bloom filter.
 // The options values same as the redisbloom C version.
-var DefaultBuildBloomOptions = &BloomBuildOptions{
+var DefaultBuildBloomOptions = BloomBuildOptions{
 	Entries:      100,
 	Errors:       0.01,
 	BloomOptions: BLOOM_OPT_NOROUND | BLOOM_OPT_FORCE64 | BLOOM_OPT_NO_SCALING,
 	Growth:       2,
 }
-
+// NewGoBloom is a constructor for GoBloomFilterImpl.
+// The `buildOptions` is the options for building a new bloom filter.
+// 
+// It is refer to the c version of `bloom_init` function in redisbloom module.
 func NewGoBloom(buildOptions *BloomBuildOptions) *GoBloomFilterImpl {
 	entries := buildOptions.Entries
 	errorRate := buildOptions.Errors
@@ -96,7 +102,6 @@ func NewGoBloom(buildOptions *BloomBuildOptions) *GoBloomFilterImpl {
 	if entries < 1 || errorRate <= 0 || errorRate >= 1.0 {
 		return nil
 	}
-	//  tightening := (options & BLOOM_OPT_NO_SCALING) ? 1 : ERROR_TIGHTENING_RATIO;
 	tightening := 1.00
 	if options&BLOOM_OPT_NO_SCALING != 0 {
 		tightening = 0.5

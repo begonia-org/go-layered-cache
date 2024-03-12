@@ -14,7 +14,7 @@ import (
 type LocalBloomFilters struct {
 	filters           map[string]*gobloom.GoBloomChain
 	mux               sync.RWMutex
-	bloomBuildOptions *gobloom.BloomBuildOptions
+	bloomBuildOptions gobloom.BloomBuildOptions
 }
 
 // 对应于C中的dumpedChainHeader结构体，注意links字段在Go中的处理
@@ -179,7 +179,7 @@ func (lbf *LocalBloomFilters) Load(ctx context.Context, key interface{}, args ..
 
 }
 
-func NewLocalBloomFilters(filters map[string]*gobloom.GoBloomChain, buildOptions *gobloom.BloomBuildOptions) *LocalBloomFilters {
+func NewLocalBloomFilters(filters map[string]*gobloom.GoBloomChain, buildOptions gobloom.BloomBuildOptions) *LocalBloomFilters {
 	return &LocalBloomFilters{
 		filters:           filters,
 		bloomBuildOptions: buildOptions,

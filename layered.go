@@ -61,15 +61,30 @@ type LayeredCuckooFilter interface {
 	Del(ctx context.Context, key string, value []byte) error
 }
 
+// LayeredBuildOptions is the options for building the layered cache
 type LayeredBuildOptions struct {
+	// RDB is the redis client as the source cache
 	RDB     *redis.Client
+	// Watcher is the watch options for the source cache
 	Watcher *source.WatchOptions
+	// Log is the logger
 	Log     *logrus.Logger
-
+	// Channel is the channel for the source cache
+	// It is used to receive the message from the source cache
+	// It is also used to publish the message to the source cache
+	// In the case of the source cache is redis, it is the redis xstream channel
 	Channel   interface{}
+	// KeyPrefix is the key prefix for cache,like "cache:test:bloom"
 	KeyPrefix string
+
+	// Strategy is the read strategy
+	// It is used to determine the read strategy when the cache is read.  
+	// For Read from the local cache only, it is LocalOnly.  
+	// For Read from the local cache first, then from the source cache when the local cache is none, it is LocalThenSource
 	Strategy  CacheReadStrategy
 }
+
+// LayeredBloomFilterOptions is the options for building the layered bloom filter
 type LayeredCuckooFilterOptions struct {
 	RDB                       *redis.Client
 	Watcher                   *source.WatchOptions
