@@ -1,40 +1,39 @@
 [简体中文](README.md)|[English](README_EN.md)
-# Golang 多级缓存器 Go-Layered-Cache
+# Golang Layered Caching: Go-Layered-Cache
 
-## 基于redis和本机内存的支持分布式环境的多级缓存框架
+## A multi-level caching framework based on Redis and local memory for distributed environments
 
-**特性:**
+**Features:**
 
-- 支持分布式环境下多级缓存同步  
-- 支持redis布隆过滤器数据和本地内存布隆过滤器双向同步  
-- 支持redis布隆过滤器`bf.scandump`数据导入本地内存布隆过滤器  
-- 支持redis布谷鸟过滤器数据和本地内存布谷鸟过滤器双向同步  
-- 支持redis布谷鸟过滤器`cf.scandump`数据导入本地内存布谷鸟过滤器 
-- 支持redis `set`、`get`缓存同步
-- 基于golang实现了[redisbloom](https://github.com/RedisBloom/RedisBloom)模块的布隆过滤器和布谷鸟过滤器 
+- Supports multi-level cache synchronization in distributed environments
+- Supports bidirectional synchronization between Redis Bloom filters and local memory Bloom filters
+- Allows importing Redis Bloom filter data into local memory Bloom filters using `bf.scandump`
+- Supports bidirectional synchronization between Redis Cuckoo filters and local memory Cuckoo filters
+- Allows importing Redis Cuckoo filter data into local memory Cuckoo filters using `cf.scandump`
+- Supports Redis `set` and `get` cache synchronization
+- Implements Bloom and Cuckoo filters based on the [RedisBloom](https://github.com/RedisBloom/RedisBloom) module in Golang
 
+## Getting Started
 
-## 开始
+### Installation
 
-### 安装
+Supports [Go module](https://github.com/golang/go/wiki/Modules) and can be imported into your code as follows:
 
-支持 [Go module](https://github.com/golang/go/wiki/Modules) 并通过以下方式引入你的代码中
-
-```
+```go
 import "github.com/begonia-org/go-layered-cache"
 ```
 
-随后执行`go [build|run|test]` 将会自动安装必须的依赖。
+Subsequently, executing `go [build|run|test]` will automatically install the necessary dependencies.
 
-另外，你也可以通过下面的方式安装 `go-layered-cache` 包:
+Alternatively, you can install the `go-layered-cache` package with the following command:
 
 ```sh
 $ go get -u github.com/begonia-org/go-layered-cache
 ```
 
-### 示例
+### Example
 
-首先，你需要导入 `go-layered-cache` 包以使用 `go-layered-cache`，下面是一个最简单的[示例](example/main.go):
+First, you need to import the `go-layered-cache` package to use `go-layered-cache`. Below is a simple [example](example/main.go):
 
 ```go
 package main
@@ -179,12 +178,12 @@ func main() {
 }
 ```
 
-使用 Go 命令来运行这个demo:
+Run this demo using the Go command:
 
 ```
 $ go run main.go
 ```
 
-## 贡献
+## Contributing
 
-非常期待和欢迎您提交PR为go-layered-cache做出贡献
+We highly anticipate and welcome your PRs to contribute to go-layered-cache
