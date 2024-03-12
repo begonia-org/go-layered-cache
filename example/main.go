@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/allegro/bigcache/v3"
 	glc "github.com/begonia-org/go-layered-cache"
 	"github.com/begonia-org/go-layered-cache/gobloom"
 	"github.com/begonia-org/go-layered-cache/gocuckoo"
@@ -35,7 +34,7 @@ func NewCache() *Cache {
 		Log:       logrus.New(),
 		KeyPrefix: "cache:test:kv",
 	}
-	kv, err := glc.NewKeyValueCache(ctx, KvOptions, bigcache.DefaultConfig(10*time.Minute))
+	kv, err := glc.NewKeyValueCache(ctx, KvOptions, 100*100*5)
 	if err != nil {
 		panic(err)
 
@@ -106,7 +105,7 @@ func main() {
 	cache := NewCache()
 	ctx := context.Background()
 	cache.watcher(ctx)
-	err := cache.KV.Set(ctx, "key", []byte("value"))
+	err := cache.KV.Set(ctx, "key", []byte("value"), 0)
 	if err != nil {
 		panic(err)
 	}

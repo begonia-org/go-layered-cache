@@ -7,13 +7,14 @@ package golayeredcache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
 type LayeredKeyValueCacheImpl struct {
-	*LayeredCacheImpl
+	*BaseLayeredCacheImpl
 	log       *logrus.Logger
 	keyPrefix string
 }
@@ -40,8 +41,9 @@ func (lb *LayeredKeyValueCacheImpl) OnMessage(ctx context.Context, from string, 
 	if !ok {
 		return fmt.Errorf("value is not string, got %T", values["value"])
 	}
-
-	return lb.SetToLocal(ctx, key, []byte(value))
+	exp,_:=values["expire"].(int64)
+	expVal:=time.Duration(exp)*time.Second
+	return lb.SetToLocal(ctx, key, []byte(value),expVal)
 }
 
 func (lb *LayeredKeyValueCacheImpl) onScan(ctx context.Context, key interface{}) error {
@@ -58,7 +60,12 @@ func (lb *LayeredKeyValueCacheImpl) onScan(ctx context.Context, key interface{})
 			lb.log.Errorf("dump:%v", err)
 			continue
 		}
-		if err := lb.Load(ctx, keyStr, v); err != nil {
+		vals,ok:=v.([]interface{})
+		if !ok{
+			lb.log.Errorf("dump: error type%v", v)
+			continue
+		}
+		if err := lb.Load(ctx, keyStr, vals...); err != nil {
 			lb.log.Errorf("load:%v", err)
 			continue
 		}
@@ -77,33 +84,33 @@ func (lb *LayeredKeyValueCacheImpl) LoadDump(ctx context.Context) error {
 	return nil
 }
 func (lc *LayeredKeyValueCacheImpl) Watch(ctx context.Context) <-chan error {
-	return lc.LayeredCacheImpl.Watch(ctx, lc.OnMessage)
+	return lc.BaseLayeredCacheImpl.Watch(ctx, lc.OnMessage)
 }
 func (lc *LayeredKeyValueCacheImpl) UnWatch() error {
-	return lc.LayeredCacheImpl.UnWatch()
+	return lc.BaseLayeredCacheImpl.UnWatch()
 }
 
-func NewLayeredKeyValueCacheImpl(layered *LayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredKeyValueCache {
+func newLayeredKeyValueCacheImpl(layered *BaseLayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredKeyValueCache {
 	return &LayeredKeyValueCacheImpl{
-		LayeredCacheImpl: layered,
+		BaseLayeredCacheImpl: layered,
 		keyPrefix:        keyPrefix,
 		log:              log,
 	}
 }
 
 func (lc *LayeredKeyValueCacheImpl) Get(ctx context.Context, key string) ([]byte, error) {
-	values, err := lc.LayeredCacheImpl.Get(ctx, key)
+	values, err := lc.BaseLayeredCacheImpl.Get(ctx, key)
 	if err != nil || len(values) == 0 {
 		return nil, err
 	}
 	return values[0].([]byte), nil
 }
-func (lc *LayeredKeyValueCacheImpl) Set(ctx context.Context, key string, value []byte) error {
-	return lc.LayeredCacheImpl.Set(ctx, key, value)
+func (lc *LayeredKeyValueCacheImpl) Set(ctx context.Context, key string, value []byte,exp time.Duration) error {
+	return lc.BaseLayeredCacheImpl.Set(ctx, key, value,exp)
 }
 
 func (lc *LayeredKeyValueCacheImpl) Del(ctx context.Context, key string) error {
-	return lc.LayeredCacheImpl.Del(ctx, key)
+	return lc.BaseLayeredCacheImpl.Del(ctx, key)
 }
 
 // func (lc *LayeredKeyValueCacheImpl)Del()

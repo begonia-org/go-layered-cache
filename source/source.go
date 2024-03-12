@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/begonia-org/go-layered-cache/utils"
 	"github.com/redis/go-redis/v9"
@@ -67,9 +68,17 @@ func (d *DataSourceFromRedis) Get(ctx context.Context, key string, args ...inter
 	}
 	return val, nil
 }
-func (d *DataSourceFromRedis) Set(ctx context.Context, key string, args ...interface{}) error {
-	return fmt.Errorf("not implement")
+func (d *DataSourceFromRedis) Expiration(ctx context.Context, key string) (time.Duration, error) {
+	val, err := d.rdb.TTL(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }
+
+//	func (d *DataSourceFromRedis) Set(ctx context.Context, key string, args ...interface{}) error {
+//		return fmt.Errorf("not implement")
+//	}
 func (d *DataSourceFromRedis) GetExec(ctx context.Context, cmd string, args ...interface{}) ([]interface{}, error) {
 	result := make([]interface{}, 0)
 

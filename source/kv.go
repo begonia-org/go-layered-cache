@@ -7,6 +7,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -34,33 +35,33 @@ func (bs *CacheSourceImpl) Get(ctx context.Context, key string, values ...interf
 }
 
 func (bs *CacheSourceImpl) Set(ctx context.Context, key string, values ...interface{}) error {
-	args := make([]interface{}, len(values))
-	messages := make([]interface{}, len(values))
-	for i, v := range values {
-		if v == nil {
-			continue
-		}
-		data, ok := v.([]byte)
-		if !ok || len(data) == 0 {
-			return fmt.Errorf("value is not []byte or empty")
-		}
 
-		arg := []interface{}{key, string(data)}
-		args[i] = arg
-		messages[i] = map[string]interface{}{
-			"key":   key,
-			"value": data,
-		}
+	messages := []interface{}{}
+	msg := map[string]interface{}{
+		"key":    key,
+		"value":  values[0],
+		"expire": 0,
 	}
+	args := []interface{}{key, values[0]}
+
+	if len(values) > 1 {
+		exp, ok := values[1].(time.Duration)
+		if !ok {
+			return fmt.Errorf("expire is not time.Duration")
+		}
+		args = append(args, "EX", int(exp.Seconds()))
+		msg["expire"] = exp.Seconds()
+	}
+	messages = append(messages, msg)
 	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{
 		Channel:      bs.channel,
 		Cmd:          "SET",
-		CmdArgs:      args,
+		CmdArgs:      []interface{}{args},
 		SendMessages: messages,
 	})
 }
 func (bs *CacheSourceImpl) Del(ctx context.Context, key interface{}, args ...interface{}) error {
-	delKey:=[]interface{}{key}
+	delKey := []interface{}{key}
 	args2 := []interface{}{delKey}
 	messages := []interface{}{map[string]interface{}{
 		"key":   key,
@@ -86,7 +87,12 @@ func (bs *CacheSourceImpl) Dump(ctx context.Context, key interface{}, args ...in
 		return ch
 
 	}
-	ch <- []byte(values)
+	valuesExp, err := bs.DataSourceFromRedis.Expiration(ctx, key.(string))
+	if err != nil {
+		ch <- fmt.Errorf("Expiration:%w", err)
+	}
+	val := []interface{}{[]byte(values), valuesExp}
+	ch <- val
 	// go func() {
 
 	return ch

@@ -7,68 +7,67 @@ package local
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/allegro/bigcache/v3"
+	"github.com/begonia-org/go-layered-cache/cache"
 )
 
-
-type LocalCacheImpl struct {
-	*bigcache.BigCache
+type LocalKeyValueCacheImpl struct {
+	*cache.LocalCacheImpl
 }
 
-func NewLocalCache(cache *bigcache.BigCache) *LocalCacheImpl {
-	return &LocalCacheImpl{
-		BigCache: cache,
-	}
-}
-
-func (lc *LocalCacheImpl) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error) {
-	val,err:= lc.BigCache.Get(key.(string))
+func NewLocalCache(ctx context.Context, maxEntries int) (*LocalKeyValueCacheImpl, error) {
+	local, err := cache.NewLocalCacheImpl(ctx, maxEntries)
 	if err != nil {
-		return nil,err
-	
+		return nil, err
 	}
-	return []interface{}{val},nil
+	return &LocalKeyValueCacheImpl{
+		LocalCacheImpl: local,
+	}, nil
+}
+
+func (lc *LocalKeyValueCacheImpl) Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error) {
+	val, err := lc.LocalCacheImpl.Get(key.(string))
+	if err != nil {
+		return nil, err
+
+	}
+	return []interface{}{val}, nil
 }
 
 // Set key value
 //
 // NOTE
-func (lc *LocalCacheImpl) Set(ctx context.Context, key interface{}, args ...interface{}) error {
+func (lc *LocalKeyValueCacheImpl) Set(ctx context.Context, key interface{}, args ...interface{}) error {
 	if len(args) == 0 {
 		return fmt.Errorf("args is empty")
 	}
-	for _,v := range args {
-		value,ok := v.([]byte)
-		if !ok {
-			return fmt.Errorf("value is not []byte")
-		}
-		err := lc.BigCache.Set(key.(string), value)
-		if err != nil {
-			return err
-		}
-	
+	value, ok := args[0].([]byte)
+	if !ok {
+		return fmt.Errorf("value is not []byte")
+
 	}
-	return nil
+	if len(args) > 2 {
+		return fmt.Errorf("args is too much")
+	}
+	var expire time.Duration = 0
+	if len(args) == 2 {
+		expire, ok = args[1].(time.Duration)
+		if !ok {
+			return fmt.Errorf("expire is not time.Duration")
+		}
+	}
+	return lc.LocalCacheImpl.Set(key.(string), value, expire)
+
 }
 
-func (lc *LocalCacheImpl) Del(ctx context.Context, key interface{}, args ...interface{}) error {
+func (lc *LocalKeyValueCacheImpl) Del(ctx context.Context, key interface{}, args ...interface{}) error {
 
-	return lc.BigCache.Delete(key.(string))
+	return lc.LocalCacheImpl.Del(ctx, key.(string))
 }
-func (lc *LocalCacheImpl)Load(ctx context.Context, key interface{}, args ...interface{}) error{
+func (lc *LocalKeyValueCacheImpl) Load(ctx context.Context, key interface{}, args ...interface{}) error {
 	if len(args) == 0 {
 		return fmt.Errorf("args is empty")
 	}
-	for _,v := range args {
-		value,ok := v.([]byte)
-		if !ok {
-			return fmt.Errorf("value is not []byte")
-		}
-		err := lc.BigCache.Set(key.(string), value)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return lc.Set(ctx, key, args...)
 }

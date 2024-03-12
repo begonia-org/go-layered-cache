@@ -15,7 +15,7 @@ import (
 )
 
 type LayeredBloomFilter struct {
-	*LayeredCacheImpl
+	*BaseLayeredCacheImpl
 	log       *logrus.Logger
 	keyPrefix string
 }
@@ -79,21 +79,21 @@ func (lb *LayeredBloomFilter) LoadDump(ctx context.Context) error {
 	return nil
 }
 func (lc *LayeredBloomFilter) Watch(ctx context.Context) <-chan error {
-	return lc.LayeredCacheImpl.Watch(ctx, lc.OnMessage)
+	return lc.BaseLayeredCacheImpl.Watch(ctx, lc.OnMessage)
 }
 func (lc *LayeredBloomFilter) UnWatch() error {
-	return lc.LayeredCacheImpl.UnWatch()
+	return lc.BaseLayeredCacheImpl.UnWatch()
 }
-func NewLayeredBloomFilter(layered *LayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredFilter {
+func newLayeredBloomFilter(layered *BaseLayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredFilter {
 	return &LayeredBloomFilter{
-		LayeredCacheImpl: layered,
+		BaseLayeredCacheImpl: layered,
 		keyPrefix:        keyPrefix,
 		log:              log,
 	}
 }
 
 func (lc *LayeredBloomFilter) Check(ctx context.Context, key string, value []byte) (bool, error) {
-	vals, err := lc.LayeredCacheImpl.Get(ctx, key, value)
+	vals, err := lc.BaseLayeredCacheImpl.Get(ctx, key, value)
 	if err != nil {
 		lc.log.Errorf("check value of %s error:%v", key, err)
 		return false, err
@@ -104,9 +104,9 @@ func (lc *LayeredBloomFilter) Check(ctx context.Context, key string, value []byt
 	return vals[0].(bool), nil
 }
 func (lc *LayeredBloomFilter) Add(ctx context.Context, key string, value []byte) error {
-	return lc.LayeredCacheImpl.Set(ctx, key, value)
+	return lc.BaseLayeredCacheImpl.Set(ctx, key, value)
 }
 
 func (lc *LayeredBloomFilter) AddLocalFilter(key string, filter local.Filter) error {
-	return lc.LayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
+	return lc.BaseLayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
 }

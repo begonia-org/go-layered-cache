@@ -36,7 +36,7 @@ func mockRedis() *gomonkey.Patches {
 	patches.ApplyFuncReturn((*redis.ScanCmd).Iterator, &redis.ScanIterator{})
 	patches.ApplyFuncReturn((*redis.ScanIterator).Val, "test:cache:item2")
 	patches.ApplyFuncReturn((*redis.StringCmd).Result, "item", nil)
-
+	patches.ApplyFuncReturn((*redis.DurationCmd).Result,time.Second * 3, nil)
 	// patches.ApplyFuncSeq((*redis.ScanDumpCmd).Result, outSeq2)
 
 	patches.ApplyFuncReturn((*redis.Pipeline).Exec, nil, nil)
@@ -63,15 +63,13 @@ func TestLoad(t *testing.T) {
 			RDB:       rdb,
 			Watcher:   &watcher,
 			KeyPrefix: "test:cache:*",
-			// Entries:   1000,
-			// Errors:    0.01,
+	
 			Channel:  "cache:test",
 			Strategy: LocalOnly,
 			Log:      logrus.New(),
 		}
 
-		defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
-		layered, _ := NewKeyValueCache(ctx, options, defaultBuildOptions)
+		layered, _ := NewKeyValueCache(ctx, options, 100 * 100 * 5)
 		err := layered.LoadDump(ctx)
 		c.So(err, c.ShouldBeNil)
 		time.Sleep(1 * time.Second)
@@ -80,6 +78,24 @@ func TestLoad(t *testing.T) {
 		c.So(err, c.ShouldBeNil)
 		c.So(value, c.ShouldNotBeNil)
 		c.So(string(value), c.ShouldEqual, "item")
+		time.Sleep(2500 * time.Millisecond)
+		value, err = layered.Get(ctx, "test:cache:item2")
+		c.So(err, c.ShouldBeNil)
+		c.So(value, c.ShouldBeNil)
+		err=layered.Set(ctx, "test:cache:item3", []byte("item"), 0)
+		c.So(err, c.ShouldBeNil)
+		time.Sleep(1 * time.Second)
+		value, err = layered.Get(ctx, "test:cache:item3")
+		c.So(err, c.ShouldBeNil)
+		c.So(value, c.ShouldNotBeNil)
+
+		err = layered.Set(ctx, "test:cache:item4", []byte("item"), time.Second * 1)
+		c.So(err, c.ShouldBeNil)
+		time.Sleep(2 * time.Second)
+		value, err = layered.Get(ctx, "test:cache:item4")
+		c.So(err, c.ShouldBeNil)
+		c.So(value, c.ShouldBeNil)
+
 	})
 }
 
@@ -103,27 +119,26 @@ func TestWatch(t *testing.T) {
 			RDB:       rdb,
 			Watcher:   &watcher,
 			KeyPrefix: "test:cache:*",
-			// Entries:   1000,
-			// Errors:    0.01,
+	
 			Channel:  "cache:test:channel",
 			Strategy: LocalOnly,
 			Log:      logrus.New(),
 		}
 
-		defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
-		layered1, _ := NewKeyValueCache(ctx, options, defaultBuildOptions)
+		// defaultBuildOptions := bigcache.DefaultConfig(10 * time.Minute)
+		layered1, _ := NewKeyValueCache(ctx, options, 100 * 100 * 5)
 
-		err := layered1.Set(ctx, "test:cache:item2", []byte("item"))
+		err := layered1.Set(ctx, "test:cache:item2", []byte("item"), 0)
 		c.So(err, c.ShouldBeNil)
 		// ctx1, _ := context.WithCancel(ctx)
 		pathch1 := gomonkey.ApplyFunc((*redis.XStreamSliceCmd).Result, func(_ *redis.XStreamSliceCmd) ([]redis.XStream, error) {
 			return []redis.XStream{{Stream: "cache:test:channel",
 				Messages: []redis.XMessage{{ID: "1-1",
-					Values: map[string]interface{}{"value": "item", "key": "test:cache:item2"}}}}}, nil
+					Values: map[string]interface{}{"value": "item", "key": "test:cache:item2","expire":time.Second * 3}}}}}, nil
 
 		})
 		layered1.Watch(ctx)
-		layered2, _ := NewKeyValueCache(ctx, options, defaultBuildOptions)
+		layered2, _ := NewKeyValueCache(ctx, options, 100 * 100 * 5)
 		time.Sleep(1500 * time.Millisecond)
 		// cancel()
 		// ctx2, _ := context.WithCancel(ctx)

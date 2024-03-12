@@ -15,14 +15,14 @@ import (
 )
 
 type LayeredCuckooFilterImpl struct {
-	*LayeredCacheImpl
+	*BaseLayeredCacheImpl
 	log       *logrus.Logger
 	keyPrefix string
 }
 
-func NewLayeredCuckooFilterImpl(layered *LayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredCuckooFilter {
+func newLayeredCuckooFilterImpl(layered *BaseLayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredCuckooFilter {
 	return &LayeredCuckooFilterImpl{
-		LayeredCacheImpl: layered,
+		BaseLayeredCacheImpl: layered,
 		keyPrefix:        keyPrefix,
 		log:              log,
 	}
@@ -90,14 +90,14 @@ func (lb *LayeredCuckooFilterImpl) LoadDump(ctx context.Context) error {
 	return nil
 }
 func (lc *LayeredCuckooFilterImpl) Watch(ctx context.Context) <-chan error {
-	return lc.LayeredCacheImpl.Watch(ctx, lc.OnMessage)
+	return lc.BaseLayeredCacheImpl.Watch(ctx, lc.OnMessage)
 }
 func (lc *LayeredCuckooFilterImpl) UnWatch() error {
-	return lc.LayeredCacheImpl.UnWatch()
+	return lc.BaseLayeredCacheImpl.UnWatch()
 }
 
 func (lc *LayeredCuckooFilterImpl) Check(ctx context.Context, key string, value []byte) (bool, error) {
-	vals, err := lc.LayeredCacheImpl.Get(ctx, key, value)
+	vals, err := lc.BaseLayeredCacheImpl.Get(ctx, key, value)
 	if err != nil {
 		lc.log.Errorf("check value of %s error:%v", key, err)
 		return false, err
@@ -108,12 +108,12 @@ func (lc *LayeredCuckooFilterImpl) Check(ctx context.Context, key string, value 
 	return vals[0].(bool), nil
 }
 func (lc *LayeredCuckooFilterImpl) Add(ctx context.Context, key string, value []byte) error {
-	return lc.LayeredCacheImpl.Set(ctx, key, value)
+	return lc.BaseLayeredCacheImpl.Set(ctx, key, value)
 }
 func (lc *LayeredCuckooFilterImpl) Del(ctx context.Context, key string, value []byte) error {
-	return lc.LayeredCacheImpl.Del(ctx, key, value)
+	return lc.BaseLayeredCacheImpl.Del(ctx, key, value)
 }
 
 func (lc *LayeredCuckooFilterImpl) AddLocalFilter( key string, filter local.Filter) error{
-	return lc.LayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
+	return lc.BaseLayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
 }
