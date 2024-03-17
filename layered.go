@@ -35,6 +35,7 @@ type Watcher interface {
 type Loader interface {
 	LoadDump(ctx context.Context) error
 }
+
 // LayeredCache is the interface for the layered cache
 type LayeredCache interface {
 	// Get key value
@@ -54,7 +55,7 @@ type LayeredKeyValueCache interface {
 	Watcher
 	Loader
 	Get(ctx context.Context, key string) ([]byte, error)
-	Set(ctx context.Context, key string, value []byte,exp time.Duration) error
+	Set(ctx context.Context, key string, value []byte, exp time.Duration) error
 	Del(ctx context.Context, key string) error
 }
 type LayeredFilter interface {
@@ -62,7 +63,7 @@ type LayeredFilter interface {
 	Loader
 	Check(ctx context.Context, key string, value []byte) (bool, error)
 	Add(ctx context.Context, key string, value []byte) error
-	AddLocalFilter(key string,filter local.Filter)error
+	AddLocalFilter(key string, filter local.Filter) error
 }
 type LayeredCuckooFilter interface {
 	LayeredFilter
@@ -72,24 +73,24 @@ type LayeredCuckooFilter interface {
 // LayeredBuildOptions is the options for building the layered cache
 type LayeredBuildOptions struct {
 	// RDB is the redis client as the source cache
-	RDB     *redis.Client
+	RDB *redis.Client
 	// Watcher is the watch options for the source cache
 	Watcher *source.WatchOptions
 	// Log is the logger
-	Log     *logrus.Logger
+	Log *logrus.Logger
 	// Channel is the channel for the source cache
 	// It is used to receive the message from the source cache
 	// It is also used to publish the message to the source cache
 	// In the case of the source cache is redis, it is the redis xstream channel
-	Channel   interface{}
+	Channel interface{}
 	// KeyPrefix is the key prefix for cache,like "cache:test:bloom"
 	KeyPrefix string
 
 	// Strategy is the read strategy
-	// It is used to determine the read strategy when the cache is read.  
-	// For Read from the local cache only, it is LocalOnly.  
+	// It is used to determine the read strategy when the cache is read.
+	// For Read from the local cache only, it is LocalOnly.
 	// For Read from the local cache first, then from the source cache when the local cache is none, it is LocalThenSource
-	Strategy  CacheReadStrategy
+	Strategy CacheReadStrategy
 }
 
 // LayeredBloomFilterOptions is the options for building the layered bloom filter
@@ -128,6 +129,15 @@ func (lc *BaseLayeredCacheImpl) Get(ctx context.Context, key interface{}, args .
 			return nil, err
 		}
 		vals, err = lc.source.Get(ctx, key.(string), args...)
+		if err != nil {
+			return nil, err
+		}
+		if len(vals) > 0 {
+			err = lc.local.Set(ctx, key.(string), vals...)
+			if err != nil {
+				lc.log.Errorf("local.Set:%v", err)
+			}
+		}
 		return vals, err
 
 	}

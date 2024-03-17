@@ -49,8 +49,11 @@ func (bs *CacheSourceImpl) Set(ctx context.Context, key string, values ...interf
 		if !ok {
 			return fmt.Errorf("expire is not time.Duration")
 		}
-		args = append(args, "EX", int(exp.Seconds()))
-		msg["expire"] = exp.Seconds()
+		if exp > 0 {
+			args = append(args, "EX", int(exp.Seconds()))
+			msg["expire"] = exp.Seconds()
+		}
+
 	}
 	messages = append(messages, msg)
 	return bs.DataSourceFromRedis.TxWriteHandle(ctx, &TxHandleKeysOptions{

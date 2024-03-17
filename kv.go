@@ -41,9 +41,9 @@ func (lb *LayeredKeyValueCacheImpl) OnMessage(ctx context.Context, from string, 
 	if !ok {
 		return fmt.Errorf("value is not string, got %T", values["value"])
 	}
-	exp,_:=values["expire"].(int64)
-	expVal:=time.Duration(exp)*time.Second
-	return lb.SetToLocal(ctx, key, []byte(value),expVal)
+	exp, _ := values["expire"].(int64)
+	expVal := time.Duration(exp) * time.Second
+	return lb.SetToLocal(ctx, key, []byte(value), expVal)
 }
 
 func (lb *LayeredKeyValueCacheImpl) onScan(ctx context.Context, key interface{}) error {
@@ -60,8 +60,8 @@ func (lb *LayeredKeyValueCacheImpl) onScan(ctx context.Context, key interface{})
 			lb.log.Errorf("dump:%v", err)
 			continue
 		}
-		vals,ok:=v.([]interface{})
-		if !ok{
+		vals, ok := v.([]interface{})
+		if !ok {
 			lb.log.Errorf("dump: error type%v", v)
 			continue
 		}
@@ -93,8 +93,8 @@ func (lc *LayeredKeyValueCacheImpl) UnWatch() error {
 func newLayeredKeyValueCacheImpl(layered *BaseLayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredKeyValueCache {
 	return &LayeredKeyValueCacheImpl{
 		BaseLayeredCacheImpl: layered,
-		keyPrefix:        keyPrefix,
-		log:              log,
+		keyPrefix:            keyPrefix,
+		log:                  log,
 	}
 }
 
@@ -103,10 +103,17 @@ func (lc *LayeredKeyValueCacheImpl) Get(ctx context.Context, key string) ([]byte
 	if err != nil || len(values) == 0 {
 		return nil, err
 	}
-	return values[0].([]byte), nil
+	if val, ok := values[0].([]byte); ok {
+		return val, nil
+	}
+	if val, ok := values[0].(string); ok {
+		return []byte(val), nil
+
+	}
+	return nil, fmt.Errorf("type except []byte or string, but got %T", values[0])
 }
-func (lc *LayeredKeyValueCacheImpl) Set(ctx context.Context, key string, value []byte,exp time.Duration) error {
-	return lc.BaseLayeredCacheImpl.Set(ctx, key, value,exp)
+func (lc *LayeredKeyValueCacheImpl) Set(ctx context.Context, key string, value []byte, exp time.Duration) error {
+	return lc.BaseLayeredCacheImpl.Set(ctx, key, value, exp)
 }
 
 func (lc *LayeredKeyValueCacheImpl) Del(ctx context.Context, key string) error {

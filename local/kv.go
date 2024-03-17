@@ -44,7 +44,8 @@ func (lc *LocalKeyValueCacheImpl) Set(ctx context.Context, key interface{}, args
 	}
 	value, ok := args[0].([]byte)
 	if !ok {
-		return fmt.Errorf("value is not []byte")
+		// return fmt.Errorf("value is not []byte")
+		value = []byte(fmt.Sprintf("%v", args[0]))
 
 	}
 	if len(args) > 2 {
