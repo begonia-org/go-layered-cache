@@ -36,13 +36,19 @@ type Loader interface {
 	LoadDump(ctx context.Context) error
 }
 
+// LayeredLocalCache is the interface for the local cache
+type LayeredLocalCache interface{
+	GetFromLocal(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
+	SetToLocal(ctx context.Context, key interface{}, args ...interface{}) error
+}
 // LayeredCache is the interface for the layered cache
 type LayeredCache interface {
+	LayeredLocalCache
+
 	// Get key value
 	Get(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
 	Set(ctx context.Context, key interface{}, args ...interface{}) error
-	GetFromLocal(ctx context.Context, key interface{}, args ...interface{}) ([]interface{}, error)
-	SetToLocal(ctx context.Context, key interface{}, args ...interface{}) error
+
 
 	Watch(ctx context.Context) <-chan error
 	UnWatch() error
@@ -52,6 +58,7 @@ type LayeredCache interface {
 }
 type LayeredKeyValueCache interface {
 	// LayeredCache
+	LayeredLocalCache
 	Watcher
 	Loader
 	Get(ctx context.Context, key string) ([]byte, error)
@@ -123,7 +130,7 @@ func (lc *BaseLayeredCacheImpl) Get(ctx context.Context, key interface{}, args .
 	vals, err := lc.local.Get(ctx, key.(string), args...)
 	if err != nil || len(vals) == 0 {
 		if err != nil {
-			lc.log.Errorf("local.Get:%v", err)
+			lc.log.Errorf("local.Get %v error:%v",key, err)
 		}
 		if lc.strategy == LocalOnly {
 			return nil, err

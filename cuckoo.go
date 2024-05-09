@@ -23,8 +23,8 @@ type LayeredCuckooFilterImpl struct {
 func newLayeredCuckooFilterImpl(layered *BaseLayeredCacheImpl, keyPrefix string, log *logrus.Logger) LayeredCuckooFilter {
 	return &LayeredCuckooFilterImpl{
 		BaseLayeredCacheImpl: layered,
-		keyPrefix:        keyPrefix,
-		log:              log,
+		keyPrefix:            keyPrefix,
+		log:                  log,
 	}
 }
 func (lb *LayeredCuckooFilterImpl) OnMessage(ctx context.Context, from string, message interface{}) error {
@@ -45,7 +45,7 @@ func (lb *LayeredCuckooFilterImpl) OnMessage(ctx context.Context, from string, m
 		return fmt.Errorf("value is not string, got %T", values["value"])
 
 	}
-	// lb.log.Infof("onMessage:%v", values)
+	lb.log.Infof("onMessage:%v", values)
 	if op, ok := values["op"].(string); ok && op == "delete" {
 		return lb.DelOnLocal(ctx, key, []byte(value))
 	}
@@ -114,6 +114,6 @@ func (lc *LayeredCuckooFilterImpl) Del(ctx context.Context, key string, value []
 	return lc.BaseLayeredCacheImpl.Del(ctx, key, value)
 }
 
-func (lc *LayeredCuckooFilterImpl) AddLocalFilter( key string, filter local.Filter) error{
+func (lc *LayeredCuckooFilterImpl) AddLocalFilter(key string, filter local.Filter) error {
 	return lc.BaseLayeredCacheImpl.local.(local.LocalFilters).AddFilter(key, filter)
 }
