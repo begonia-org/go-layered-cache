@@ -103,10 +103,10 @@ func (lc *LayeredKeyValueCacheImpl) Get(ctx context.Context, key string) ([]byte
 	if err != nil || len(values) == 0 {
 		return nil, err
 	}
-	if val, ok := values[0].([]byte); ok {
+	if val, ok := values[0].([]byte); ok&&len(val)!=0 {
 		return val, nil
 	}
-	if val, ok := values[0].(string); ok {
+	if val, ok := values[0].(string); ok&&val!="" {
 		return []byte(val), nil
 
 	}
